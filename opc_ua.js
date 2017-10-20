@@ -8,6 +8,7 @@ var endpointUrl = "opc.tcp://" + "192.168.200.10" + ":4840";
 
 var the_session, the_subscription;
 
+
 async.series([
 
     // step 1 : connect to
@@ -31,10 +32,10 @@ async.series([
             callback(err);
         });
     },
-
+    //"ns=0;i=85" "RootFolder"
     // step 3 : browse
     function(callback) {
-       the_session.browse("RootFolder", function(err,browse_result){
+       the_session.browse(  "ns=2;i=85" , function(err,browse_result){
            if(!err) {
                browse_result[0].references.forEach(function(reference) {
                    console.log( reference.browseName.toString());
@@ -46,7 +47,7 @@ async.series([
 
     // step 4 : read a variable with readVariableValue
     function(callback) {
-       the_session.readVariableValue("ns=1;s=free_memory", function(err,dataValue) {
+       the_session.readVariableValue("ns=2;s=2", function(err,dataValue) {
            if (!err) {
                console.log(" free mem % = " , dataValue.toString());
            }
@@ -60,11 +61,11 @@ async.series([
     function(callback) {
        var max_age = 0;
        var nodes_to_read = [
-          { nodeId: "ns=1;s=free_memory", attributeId: opcua.AttributeIds.Value } 
+          { nodeId: "ns=2;s=2", attributeId: opcua.AttributeIds.BrowseName } 
        ];
        the_session.read(nodes_to_read, max_age, function(err,nodes_to_read,dataValues) {
            if (!err) {
-               console.log(" free mem % = " , dataValues[0]);
+               console.log(" C1 % = " , dataValues[0]);
            }
            callback(err);
        });
@@ -98,7 +99,7 @@ async.series([
        
        // install monitored item
        var monitoredItem  = the_subscription.monitor({
-           nodeId: opcua.resolveNodeId("ns=1;s=free_memory"),
+           nodeId: opcua.resolveNodeId("ns=2;s=2"),
            attributeId: opcua.AttributeIds.Value
        },
        {
@@ -111,7 +112,7 @@ async.series([
        console.log("-------------------------------------");
        
        monitoredItem.on("changed",function(dataValue){
-          console.log(" % free mem = ",dataValue.value.value);
+          console.log(" % C1 = ",dataValue.value.value);
        });
     },
 
