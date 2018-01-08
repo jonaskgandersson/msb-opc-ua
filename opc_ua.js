@@ -3,10 +3,17 @@ var opcua = require("node-opcua");
 var async = require("async");
 
 var client = new opcua.OPCUAClient();
-var endpointUrl = "opc.tcp://" + "192.168.200.10" + ":4840";
+var endpointUrl = "opc.tcp://" + "192.168.200.55" + ":4840";
 
 
 var the_session, the_subscription;
+
+var browseDescription = {
+    
+    nodeId: "RootFolder",
+    browseDirection: opcua.BrowseDirection.Both,
+    includeSubtypes: true
+ }
 
 
 async.series([
@@ -35,10 +42,10 @@ async.series([
     //"ns=0;i=85" "RootFolder"
     // step 3 : browse
     function(callback) {
-       the_session.browse(  "ns=2;i=85" , function(err,browse_result){
+       the_session.browse(  browseDescription , function(err,browse_result){
            if(!err) {
                browse_result[0].references.forEach(function(reference) {
-                   console.log( reference.browseName.toString());
+                   console.log( reference.nodeId.toString());
                });
            }
            callback(err);
@@ -47,9 +54,9 @@ async.series([
 
     // step 4 : read a variable with readVariableValue
     function(callback) {
-       the_session.readVariableValue("ns=2;s=2", function(err,dataValue) {
+       the_session.readVariableValue("ns=2;s=V0.25", function(err,dataValue) {
            if (!err) {
-               console.log(" free mem % = " , dataValue.toString());
+               console.log(" Phase L1.Voltage = " , dataValue.toString());
            }
            callback(err);
        });
@@ -61,11 +68,11 @@ async.series([
     function(callback) {
        var max_age = 0;
        var nodes_to_read = [
-          { nodeId: "ns=2;s=2", attributeId: opcua.AttributeIds.BrowseName } 
+          { nodeId: "ns=2;s=V0.25", attributeId: opcua.AttributeIds.BrowseName } 
        ];
        the_session.read(nodes_to_read, max_age, function(err,nodes_to_read,dataValues) {
            if (!err) {
-               console.log(" C1 % = " , dataValues[0]);
+               console.log(" Phase L1.Voltage = " , dataValues[0]);
            }
            callback(err);
        });
@@ -77,9 +84,9 @@ async.series([
     function(callback) {
        
        the_subscription=new opcua.ClientSubscription(the_session,{
-           requestedPublishingInterval: 1000,
+           requestedPublishingInterval: 5000,
            requestedLifetimeCount: 10,
-           requestedMaxKeepAliveCount: 2,
+           requestedMaxKeepAliveCount: 10,
            maxNotificationsPerPublish: 10,
            publishingEnabled: true,
            priority: 10
@@ -93,13 +100,13 @@ async.series([
            callback();
        });
        
-       setTimeout(function(){
+       /*setTimeout(function(){
            the_subscription.terminate();
-       },10000);
+       },10000);*/
        
        // install monitored item
        var monitoredItem  = the_subscription.monitor({
-           nodeId: opcua.resolveNodeId("ns=2;s=2"),
+           nodeId: opcua.resolveNodeId("ns=2;s=V0.25"),
            attributeId: opcua.AttributeIds.Value
        },
        {
@@ -112,7 +119,7 @@ async.series([
        console.log("-------------------------------------");
        
        monitoredItem.on("changed",function(dataValue){
-          console.log(" % C1 = ",dataValue.value.value);
+          console.log(" Phase L1.Voltage = ",dataValue.value.value);
        });
     },
 
