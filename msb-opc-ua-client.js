@@ -6,202 +6,468 @@
 */
 var timerEvent; // In case you use a timer for fetching data
 var interval;
+var port;
+var host;
+var enableLogging;
+var logLevel;
+var filer_AND;
+var filter_OR;
+var filter_NOT;
 
-//var opcua;
-//var async;
+var opcua;
+var async;
 
-//var client;
-//var endpointUrl;
+var client;
 
-//var the_session, the_subscription;
 
+var the_session, the_subscription, endpointUrl;
+
+const monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
+
+filter_OR = ["current.value", "power.active.value"];
 
 var exports = module.exports = {
-    
-    Start : function () {
+
+    Start: function () {
         me = this;
-        this.Debug('Start')
+        this.Debug('Start');
         interval = this.GetPropertyValue('static', 'interval');
-        
-        this.AddNpmPackage('node-opcua, async', true, function(err){
+        port = this.GetPropertyValue('static', 'port');
+        host = this.GetPropertyValue('static', 'host');
+        logLevel = this.GetPropertyValue('static', 'logLevel');
+        enableLogging = this.GetPropertyValue('static', 'enableLogging');
+
+        this.AddNpmPackage('node-opcua, async', true, function (err) {
             me.Debug('STARTING');
-            if(err == null || err == ''){
-                try{                    
-                    
-                    var opcua = require("node-opcua");
-                    var async = require("async");
-                    
-                    var client = new opcua.OPCUAClient();
-                    var endpointUrl = "opc.tcp://" + "192.168.200.10" + ":4840";
-                    
-                    
-                    var the_session, the_subscription;
-                    
-                    
-                    async.series([
-                    
-                        // step 1 : connect to
-                        function(callback)  {
-                            client.connect(endpointUrl,function (err) {
-                                if(err) {
-                                    me.Debug(" cannot connect to endpoint :" , endpointUrl );
-                                } else {
-                                    me.Debug("connected !");
-                                }
-                                callback(err);
-                            });
-                        },
-                    
-                        // step 2 : createSession
-                        function(callback) {
-                            client.createSession( function(err,session) {
-                                if(!err) {
-                                    the_session = session;
-                                }
-                                callback(err);
-                            });
-                        },
-                        //"ns=0;i=85" "RootFolder"
-                        // step 3 : browse
-                        function(callback) {
-                           the_session.browse(  "ns=0;i=85"  , function(err,browse_result){
-                               if(!err) {
-                                   browse_result[0].references.forEach(function(reference) {
-                                    me.Debug( reference.browseName.toString());
-                    
-                                    the_session.browse( reference.nodeId.toString() , function(err,browse_result){
-                                        if(!err) {
-                                            browse_result[0].references.forEach(function(reference) {                       
-                                             //console.log("|");
-                                             me.Debug( "-" + reference.browseName.toString());
-                                            });
-                                        }
-                                    });              
-                                    
-                                   });
-                               }
-                               callback(err);
-                           });
-                        },
-                    
-                        // step 4 : read a variable with readVariableValue
-                        function(callback) {
-                           the_session.readVariableValue("ns=2;s=3", function(err,dataValue) {
-                               if (!err) {
-                                   me.Debug(" C2 = " , dataValue.toString());
-                               }
-                               callback(err);
-                           });
-                           
-                           
-                        },
-                        
-                        // step 4' : read a variable with read
-                        function(callback) {
-                           var max_age = 0;
-                           var nodes_to_read = [
-                              { nodeId: "ns=2;s=2", attributeId: opcua.AttributeIds.BrowseName } 
-                           ];
-                           the_session.read(nodes_to_read, max_age, function(err,nodes_to_read,dataValues) {
-                               if (!err) {
-                                   me.Debug(" C1 = " , dataValues[0]);
-                               }
-                               callback(err);
-                           });
-                           
-                           
-                        },
-                        
-                        // step 5: install a subscription and install a monitored item for 10 seconds
-                        function(callback) {
-                           
-                           the_subscription=new opcua.ClientSubscription(the_session,{
-                               requestedPublishingInterval: 1000,
-                               requestedLifetimeCount: 10,
-                               requestedMaxKeepAliveCount: 2,
-                               maxNotificationsPerPublish: 10,
-                               publishingEnabled: true,
-                               priority: 10
-                           });
-                           
-                           the_subscription.on("started",function(){
-                               me.Debug("subscription started for 2 seconds - subscriptionId=",the_subscription.subscriptionId);
-                           }).on("keepalive",function(){
-                               me.Debug("keepalive");
-                           }).on("terminated",function(){
-                               callback();
-                           });
-                           
-                           setTimeout(function(){
-                               the_subscription.terminate();
-                           },10000);
-                           
-                           // install monitored item
-                           var monitoredItem  = the_subscription.monitor({
-                               nodeId: opcua.resolveNodeId("ns=2;s=2"),
-                               attributeId: opcua.AttributeIds.Value
-                           },
-                           {
-                               samplingInterval: 100,
-                               discardOldest: true,
-                               queueSize: 10
-                           },
-                           opcua.read_service.TimestampsToReturn.Both
-                           );
-                           me.Debug("-------------------------------------");
-                           
-                           monitoredItem.on("changed",function(dataValue){
-                              me.Debug(" C1 = ",dataValue.value.value);
-                           });
-                        },
-                    
-                        // close session
-                        function(callback) {
-                            the_session.close(function(err){
-                                if(err) {
-                                    me.Debug("session closed failed ?");
-                                }
-                                callback();
-                            });
-                        }
-                    
-                    ],
-                    function(err) {
-                        if (err) {
-                            me.Debug(" failure ",err);
-                        } else {
-                            me.Debug("done!");
-                        }
-                        client.disconnect(function(){});
-                    }) ;
-                    //me.Process();
-                                        
+            if (err === null || err === '') {
+                try {
+
+                    opcua = require("node-opcua");
+                    async = require("async");
+
+                    //services
+
+                    client = new opcua.OPCUAClient();
+
+                    //browseDirection = new opcua.BrowseDirection();
+
+                    endpointUrl = "opc.tcp://" + host + ":" + port;
+
+                    me.Process();
+
                 }
-                catch(e){
+                catch (e) {
                     me.ThrowError(null, '00001', e);
                 }
             }
-            else{
+            else {
                 me.ThrowError(null, '00001', 'Unable to install node-opcua npm package');
-                me.ThrowError(null,'00001',JSON.stringify(err));
+                me.ThrowError(null, '00001', JSON.stringify(err));
                 return;
             }
-        });        
+        });
 
-        
+
     },
 
     // The Stop method is called from the Host when the Host is 
     // either stopped or has updated integrations. 
-    Stop : function () {
+    Stop: function () {
         this.Debug('The Stop method is called.');
-    
-    },    
-    
-    Process : function (message, context) {
-        me = this;
-    
-        
 
-    },    
+        the_session.close(function (err) {
+            if (err) {
+                me.Debug("session closed failed ?");
+            }
+            // callback();
+        });
+
+        client.disconnect(function () { });
+
+
+    },
+
+    Process: function (message, context) {
+        me = this;
+
+        async.series([
+
+            // step 1 : connect to
+            function (callback) {
+                client.connect(endpointUrl, function (err) {
+                    if (err) {
+                        me.Debug(" cannot connect to endpoint :", endpointUrl);
+                    } else {
+                        me.Debug("connected !");
+                    }
+                    callback(err);
+                });
+            },
+
+            // step 2 : createSession
+            function (callback) {
+                client.createSession(function (err, session) {
+                    if (!err) {
+                        the_session = session;
+                    }
+                    callback(err);
+                });
+            },
+
+            // step 3 : read a variable with readVariableValue
+            function (callback) {
+                the_session.readVariableValue("ns=2;s=3", function (err, dataValue) {
+                    if (!err) {
+                        me.Debug(" C2 = " + dataValue.toString());
+                    }
+                    callback(err);
+                });
+
+
+            },
+            // step 5: install a subscription and install a monitored item for 10 seconds
+            function (callback) {
+
+                var err;
+
+                function create_subscription() {
+
+                    assert(g_session);
+                    const parameters = {
+                        requestedPublishingInterval: 100,
+                        requestedLifetimeCount: 1000,
+                        requestedMaxKeepAliveCount: 12,
+                        maxNotificationsPerPublish: 100,
+                        publishingEnabled: true,
+                        priority: 10
+                    };
+                    the_subscription = new opcua.ClientSubscription(g_session, parameters);
+
+                }
+                callback(err);
+
+            },
+
+            function (callback) {
+
+                var err;
+                //opcua.resolveNodeId("ObjectsFolder"), "ns=2;s=D0"
+                expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, function (err, results) {
+
+                    if (err) {
+                        console.log(chalk.cyan(" Error auto browse "));
+                    }
+                });
+
+                callback(err);
+
+            },
+
+            // close session
+            function (callback) {
+                // the_session.close(function (err) {
+                //     if (err) {
+                //         me.Debug("session closed failed ?");
+                //     }
+                //     callback();
+                // });
+            }
+
+        ],
+            function (err) {
+                if (err) {
+                    me.Debug(" failure ", err);
+                } else {
+                    me.Debug("done!");
+                }
+                //client.disconnect(function () { });
+            });
+
+
+    },
+};
+
+
+// Functions from OPC UA Commander
+
+
+function expand_opcua_node_all(g_session, node_Id, filter, callback) {
+
+    //g_session = the_session;
+
+    if (!g_session) {
+        return callback(new Error("No Connection"));
+    }
+
+    const children = [];
+
+    const b = [
+        {
+            nodeId: node_Id,
+            referenceTypeId: "HierarchicalReferences",//"Organizes",
+            includeSubtypes: true,
+            browseDirection: opcua.browse_service.BrowseDirection.Forward,
+            resultMask: 0x3f
+
+        },
+        {
+            nodeId: node_Id,
+            referenceTypeId: "Aggregates",
+            includeSubtypes: true,
+            browseDirection: opcua.browse_service.BrowseDirection.Forward,
+            resultMask: 0x3f
+
+        }
+
+    ];
+
+    g_session.browse(b, function (err, results) {
+
+        if (!err) {
+
+            let result = results[0];
+
+            for (let i = 0; i < result.references.length; i++) {
+
+                const ref = result.references[i];
+
+                // console.log( ref.toString() );
+
+
+                g_session.readAllAttributes(ref.nodeId, function (err, nodesToRead, dataValues) {
+
+                    if (!err) {
+                        
+                        for (let i = 0; i < nodesToRead.length; i++) {
+
+                            const nodeToRead = nodesToRead[i];
+                            const dataValue = dataValues[i];
+
+                            if (dataValue.statusCode !== opcua.StatusCodes.Good) {
+                                continue;
+                            }
+
+                            if (nodeToRead.attributeId == opcua.AttributeIds.BrowseName) {
+
+                                
+                                const s = dataValue.value.value.toString();
+
+                                for (let i = 0; i < filter.length; i++) {
+
+                                    if (s.toLowerCase().indexOf(filter[i].toLocaleLowerCase()) > -1) {
+
+                                        console.log(" Browse name: " + s);
+                                        monitor_filtered_item(the_subscription, ref.nodeId);
+
+                                    }
+                                }
+                                
+                            }
+                        }
+
+                    } else {
+                        console.log( "*************" + ref.toString() );
+                        //console.log("#readAllAttributes returned ", err.message);
+                    }
+                });
+
+                if( ref.nodeClass !== "Variable ( 2)"){
+
+                    expand_opcua_node_all(g_session, ref.nodeId, filter, function (err, results) {
+
+                        if (err) {
+                            console.log(chalk.cyan(" Error auto browse "));
+                        }
+    
+                    });
+
+                }else{
+                    console.log( "" );
+                    console.log( "###" + ref.nodeClass.toString() );
+                    console.log( "" );
+                }               
+
+
+            }
+
+        }else{
+            console.log( "Error browse: " + b.toString() )
+        }
+        callback(err, children);
+    });
+}
+
+
+
+function monitor_filtered_item(g_subscription, node_Id) {
+
+    const monitoredItem = g_subscription.monitor({
+        nodeId: node_Id,
+        attributeId: opcua.AttributeIds.Value
+        //, dataEncoding: { namespaceIndex: 0, name:null }
+    },
+        {
+            samplingInterval: 10000,
+            discardOldest: true,
+            queueSize: 100
+        },
+        opcua.read_service.TimestampsToReturn.Both
+    );
+
+
+    // Add monitored nodes to map list
+    createNodeObject(node_Id, function (err, data) {
+
+        if (!err) {
+            monitoredFilteredItemsListData[node_Id.toString()] = data;
+            //console.log(JSON.stringify(data));
+        }
+        else {
+            console.log("#createObject:" + err);
+        }
+    });
+
+    // subscription.on("item_added",function(monitoredItem){
+    //xx monitoredItem.on("initialized",function(){ });
+    //xx monitoredItem.on("terminated",function(value){ });
+
+    monitoredItem.on("changed", function (dataValue) {
+
+
+        if (node_Id.toString() in monitoredFilteredItemsListData) {
+
+
+            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.value = dataValue.value;
+            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.statusCode = dataValue.statusCode;
+            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.serverTimestamp = dataValue.serverTimestamp.toString();
+            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.sourceTimestamp = dataValue.sourceTimestamp.toString();
+
+            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]));
+
+
+        }
+        else {
+            console.log(" Unknown nodeId: " + node_Id.toString());
+        }
+
+        //console.log(" value ", dataValue.toString(), node_Id.toString(), " changed to ", chalk.green(dataValue.value.toString()));
+
+
+    });
+
+}
+
+function createNodeObject(node_Id, callback) {
+
+    const attr = {};
+    var attrValue = {};
+
+    function append_text(prefix, s, attr) {
+
+        const str = s.replace(/ /g, '');
+        const a = str.split("\n");
+        if (a.length === 1) {
+            attr[prefix] = s;
+        } else {
+
+            for (let j = 1; j < a.length; j++) {
+
+                const b = a[j].split(":");
+
+                attrValue[b[0]] = b[1];
+
+            }
+
+            attr[a[0].replace(":", '')] = attrValue;
+
+        }
+
+    }
+
+    g_session.readAllAttributes(node_Id, function (err, nodesToRead, dataValues) {
+
+        var nodeObject = {};
+        //console.log( JSON.stringify(dataValues));
+
+        if (!err) {
+
+            for (let i = 0; i < nodesToRead.length; i++) {
+
+                const nodeToRead = nodesToRead[i];
+                const dataValue = dataValues[i];
+
+                if (dataValue.statusCode !== opcua.StatusCodes.Good) {
+                    continue;
+                }
+
+                const s = toString1(nodeToRead.attributeId, dataValue);
+                //console.log( "String: " + s);
+                append_text(attributeIdtoString[nodeToRead.attributeId], s, attr);
+
+            }
+
+            //console.log(JSON.stringify(attr));
+            callback(err, attr);
+
+        } else {
+            console.log("#createAttributeObject returned ", err.message);
+            callback(err, "null");
+        }
+    });
+
+}
+
+// From OPC UA Commander source
+
+function dataValueToString(dataValue) {
+    if (!dataValue.value || dataValue.value.value === null) {
+        return "<???> : " + dataValue.statusCode.toString();
+    }
+    switch (dataValue.value.arrayType) {
+        case opcua.VariantArrayType.Scalar:
+            return dataValue.toString();
+        case opcua.VariantArrayType.Array:
+            return dataValue.toString();
+        default:
+            return "";
+    }
+}
+
+function toString1(attribute, dataValue) {
+
+    if (!dataValue || !dataValue.value || !dataValue.value.hasOwnProperty("value")) {
+        return "<null>";
+    }
+    switch (attribute) {
+        case opcua.AttributeIds.DataType:
+            return DataTypeIdsToString[dataValue.value.value.value] + " (" + dataValue.value.value.toString() + ")";
+        case opcua.AttributeIds.NodeClass:
+            return NodeClass.get(dataValue.value.value).key + " (" + dataValue.value.value + ")";
+        case opcua.AttributeIds.WriteMask:
+        case opcua.AttributeIds.UserWriteMask:
+            return " (" + dataValue.value.value + ")";
+        case opcua.AttributeIds.NodeId:
+        case opcua.AttributeIds.BrowseName:
+        case opcua.AttributeIds.DisplayName:
+        case opcua.AttributeIds.Description:
+        case opcua.AttributeIds.EventNotifier:
+        case opcua.AttributeIds.ValueRank:
+        case opcua.AttributeIds.ArrayDimensions:
+        case opcua.AttributeIds.Historizing:
+        case opcua.AttributeIds.Executable:
+        case opcua.AttributeIds.UserExecutable:
+        case opcua.AttributeIds.MinimumSamplingInterval:
+            if (!dataValue.value.value) {
+                return "null";
+            }
+            return dataValue.value.value.toString();
+        case opcua.AttributeIds.UserAccessLevel:
+        case opcua.AttributeIds.AccessLevel:
+            if (!dataValue.value.value) {
+                return "null";
+            }
+            return opcua.AccessLevelFlag.get(dataValue.value.value).key + " (" + dataValue.value.value + ")";
+        default:
+            return dataValueToString(dataValue);
+    }
 }

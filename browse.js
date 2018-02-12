@@ -39,18 +39,18 @@ async.series([
     // step 3 : browse
     //"2:Actemium PDU [ProcessingUnit]"
     function(callback) {
-       the_session.browse(  "ns=2;s=Actemium PDU [ProcessingUnit]" , function(err,browse_result){
+       the_session.browse(  "ns=0;i=85" , function(err,browse_result){
         if(!err) {
             browse_result[0].references.forEach(function(reference) {
                 
-                //console.log( reference.nodeId.toString());
+                console.log( reference.nodeId.toString());
              
                 browseTree( the_session, reference );
                          
              
             });
         }
-        //callback(err);
+        callback(err);
        });
     },
    
