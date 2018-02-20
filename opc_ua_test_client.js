@@ -82,14 +82,14 @@ client.on("connection_reestablished", function () {
 
 // monitoring des lifetimes
 client.on("lifetime_75", function (token) {
-    if (argv.verbose) {
+    if (true) {
         console.log(chalk.red("received lifetime_75 on "+ endpointUrl));
     }
 });
 
 client.on("security_token_renewed", function () {
     data.tokenRenewalCount += 1;
-    if (argv.verbose) {
+    if (true) {
         console.log(chalk.green(" security_token_renewed on " + endpointUrl));
     }
 });
@@ -224,7 +224,7 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
         }
 
     ];
-
+    
     g_session.browse(b, function (err, results) {
 
         if (!err) {
@@ -237,24 +237,22 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                 // console.log( ref.toString() );
 
+                if( ref.nodeClass === opcua.NodeClass.Variable)
+                {
+                    var nodeTemp = {
 
-                g_session.readAllAttributes(ref.nodeId, function (err, nodesToRead, dataValues) {
+                        nodeId: ref.nodeId,
+                        attributeId: opcua.AttributeIds.BrowseName,
+                        indexRange: null,
+                        dataEncoding: {namespaceIndex: 0, name: null}
+                    };
+                    g_session.read(nodeTemp, function (err, data) {
 
-                    if (!err) {
+                        if (!err) {                        
 
-                        for (let i = 0; i < nodesToRead.length; i++) {
+                            if (data.statusCode === opcua.StatusCodes.Good) {
 
-                            const nodeToRead = nodesToRead[i];
-                            const dataValue = dataValues[i];
-
-                            if (dataValue.statusCode !== opcua.StatusCodes.Good) {
-                                continue;
-                            }
-
-                            if (nodeToRead.attributeId == opcua.AttributeIds.BrowseName) {
-
-
-                                const s = dataValue.value.value.toString();
+                                const s = data.value.value.toString();
 
                                 for (let i = 0; i < filter.length; i++) {
 
@@ -264,19 +262,18 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
                                         monitor_filtered_item(the_subscription, ref.nodeId);
 
                                     }
-                                }
-
+                                } 
+                                
                             }
+
+                        } else {
+                            console.log("*************\r\n" + ref.toString() + "*************\r\n");
+                            //console.log("#readAllAttributes returned ", err.message);
                         }
-
-                    } else {
-                        console.log("*************" + ref.toString());
-                        //console.log("#readAllAttributes returned ", err.message);
-                    }
-                });
-
-                if (ref.nodeClass !== "Variable ( 2)") {
-
+                    });
+                }
+                else
+                {
                     expand_opcua_node_all(g_session, ref.nodeId, filter, function (err, results) {
 
                         if (err) {
@@ -285,10 +282,6 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                     });
 
-                } else {
-                    console.log("");
-                    console.log("###" + ref.nodeClass.toString());
-                    console.log("");
                 }
 
 
@@ -388,27 +381,19 @@ function createNodeObject(node_Id, callback) {
 
     }
 
-    the_session.readAllAttributes(node_Id, function (err, nodesToRead, dataValues) {
+    // TO DO, change readAllAttributes to read and specify attributes of interest
+    the_session.readAllAttributes(node_Id, function (err, data) {
 
         var nodeObject = {};
         //console.log( JSON.stringify(dataValues));
 
         if (!err) {
 
-            for (let i = 0; i < nodesToRead.length; i++) {
+            if (data.statusCode === opcua.StatusCodes.Good) {
 
-                const nodeToRead = nodesToRead[i];
-                const dataValue = dataValues[i];
-
-                if (dataValue.statusCode !== opcua.StatusCodes.Good) {
-                    continue;
-                }
-
-                const s = toString1(nodeToRead.attributeId, dataValue);
-                //console.log( "String: " + s);
-                append_text(attributeIdtoString[nodeToRead.attributeId], s, attr);
-
-            }
+                attr = data;
+                
+            }            
 
             //console.log(JSON.stringify(attr));
             callback(err, attr);
