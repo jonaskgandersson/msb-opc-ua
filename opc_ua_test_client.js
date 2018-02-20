@@ -26,7 +26,6 @@ const monitoredFilteredItemsListData = {};  // Object for holding monitored OPC 
 
 filter_OR = ["voltage.value", "power.active.value"];
 
-require("colors");
 const _ = require("underscore");
 const assert = require("assert");
 const chalk = require("chalk");
