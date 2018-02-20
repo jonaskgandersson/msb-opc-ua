@@ -1,9 +1,14 @@
 /* 
- * Service template for node.js
+ * OPC UA Client
  * 
- * To use this template, simply add your code in Start and Stop method
-
-*/
+ * Connect to OPC UA Server, browse server and create subscriptions for 
+ * nodes that match filer strings.
+ * 
+ * On value change send data as JSON message.
+ * 
+ * Author: Jonas Andersson, Actemium
+ * 
+ */
 var timerEvent; // In case you use a timer for fetching data
 var interval;
 var port;
@@ -16,13 +21,31 @@ var filter_NOT;
 
 var opcua;
 var async;
+var _;
+var assert;
+var chalk;
+
+var NodeClass;
+var attributeIdtoString;
+var DataTypeIdsToString;
 
 var client;
+
+var clientData = {
+    reconnectionCount: 0,
+    tokenRenewalCount: 0,
+    receivedBytes: 0,
+    sentBytes: 0,
+    sentChunks: 0,
+    receivedChunks: 0,
+    backoffCount: 0,
+    transactionCount: 0,
+};
 
 
 var the_session, the_subscription, endpointUrl;
 
-const monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
+var monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
 filter_OR = ["current.value", "power.active.value"];
 
@@ -37,21 +60,68 @@ var exports = module.exports = {
         logLevel = this.GetPropertyValue('static', 'logLevel');
         enableLogging = this.GetPropertyValue('static', 'enableLogging');
 
-        this.AddNpmPackage('node-opcua, async', true, function (err) {
+        this.AddNpmPackage('node-opcua, underscore, assert, chalk', true, function (err) {
             me.Debug('STARTING');
             if (err === null || err === '') {
                 try {
 
-                    opcua = require("node-opcua");
+                    opcua = require("node-opcua"); // OPC UA Lib
+
+                    require("colors");
+                    _ = require("underscore");
+                    assert = require("assert");
+                    chalk = require("chalk");
                     async = require("async");
 
-                    //services
+                    NodeClass = opcua.NodeClass;
+                    attributeIdtoString = _.invert(opcua.AttributeIds);
+                    DataTypeIdsToString = _.invert(opcua.DataTypeIds);
 
                     client = new opcua.OPCUAClient();
 
-                    //browseDirection = new opcua.BrowseDirection();
-
                     endpointUrl = "opc.tcp://" + host + ":" + port;
+
+                    client.on("send_request", function () {
+                        clientData.transactionCount++;
+                    });
+
+                    client.on("send_chunk", function (chunk) {
+                        clientData.sentBytes += chunk.length;
+                        clientData.sentChunks++;
+                    });
+
+                    client.on("receive_chunk", function (chunk) {
+                        clientData.receivedBytes += chunk.length;
+                        clientData.receivedChunks++;
+                    });
+
+                    client.on("backoff", function (number, delay) {
+                        clientData.backoffCount += 1;
+                        console.log(chalk.yellow(`backoff  attempt #${number} retrying in ${delay / 1000.0} seconds`));
+                    });
+
+                    client.on("start_reconnection", function () {
+                        console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl));
+                    });
+
+                    client.on("connection_reestablished", function () {
+                        console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl));
+                        clientData.reconnectionCount++;
+                    });
+
+                    // monitoring des lifetimes
+                    client.on("lifetime_75", function (token) {
+                        if (true) {
+                            console.log(chalk.red("received lifetime_75 on " + endpointUrl));
+                        }
+                    });
+
+                    client.on("security_token_renewed", function () {
+                        clientData.tokenRenewalCount += 1;
+                        if (true) {
+                            console.log(chalk.green(" security_token_renewed on " + endpointUrl));
+                        }
+                    });
 
                     me.Process();
 
@@ -96,9 +166,9 @@ var exports = module.exports = {
             function (callback) {
                 client.connect(endpointUrl, function (err) {
                     if (err) {
-                        me.Debug(" cannot connect to endpoint :", endpointUrl);
+                        console.log(" cannot connect to endpoint :", endpointUrl);
                     } else {
-                        me.Debug("connected !");
+                        console.log("connected !");
                     }
                     callback(err);
                 });
@@ -118,7 +188,7 @@ var exports = module.exports = {
             function (callback) {
                 the_session.readVariableValue("ns=2;s=3", function (err, dataValue) {
                     if (!err) {
-                        me.Debug(" C2 = " + dataValue.toString());
+                        console.log(" C2 = " + dataValue.toString());
                     }
                     callback(err);
                 });
@@ -130,20 +200,17 @@ var exports = module.exports = {
 
                 var err;
 
-                function create_subscription() {
+                // assert(the_session);
+                const parameters = {
+                    requestedPublishingInterval: 100,
+                    requestedLifetimeCount: 1000,
+                    requestedMaxKeepAliveCount: 12,
+                    maxNotificationsPerPublish: 100,
+                    publishingEnabled: true,
+                    priority: 10
+                };
+                the_subscription = new opcua.ClientSubscription(the_session, parameters);
 
-                    assert(g_session);
-                    const parameters = {
-                        requestedPublishingInterval: 100,
-                        requestedLifetimeCount: 1000,
-                        requestedMaxKeepAliveCount: 12,
-                        maxNotificationsPerPublish: 100,
-                        publishingEnabled: true,
-                        priority: 10
-                    };
-                    the_subscription = new opcua.ClientSubscription(g_session, parameters);
-
-                }
                 callback(err);
 
             },
@@ -167,7 +234,7 @@ var exports = module.exports = {
             function (callback) {
                 // the_session.close(function (err) {
                 //     if (err) {
-                //         me.Debug("session closed failed ?");
+                //         console.log("session closed failed ?");
                 //     }
                 //     callback();
                 // });
@@ -176,9 +243,9 @@ var exports = module.exports = {
         ],
             function (err) {
                 if (err) {
-                    me.Debug(" failure ", err);
+                    console.log(" failure ", err);
                 } else {
-                    me.Debug("done!");
+                    console.log("done!");
                 }
                 //client.disconnect(function () { });
             });
@@ -186,9 +253,6 @@ var exports = module.exports = {
 
     },
 };
-
-
-// Functions from OPC UA Commander
 
 
 function expand_opcua_node_all(g_session, node_Id, filter, callback) {
@@ -237,7 +301,7 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
                 g_session.readAllAttributes(ref.nodeId, function (err, nodesToRead, dataValues) {
 
                     if (!err) {
-                        
+
                         for (let i = 0; i < nodesToRead.length; i++) {
 
                             const nodeToRead = nodesToRead[i];
@@ -249,7 +313,7 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                             if (nodeToRead.attributeId == opcua.AttributeIds.BrowseName) {
 
-                                
+
                                 const s = dataValue.value.value.toString();
 
                                 for (let i = 0; i < filter.length; i++) {
@@ -261,37 +325,37 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                                     }
                                 }
-                                
+
                             }
                         }
 
                     } else {
-                        console.log( "*************" + ref.toString() );
+                        console.log("*************" + ref.toString());
                         //console.log("#readAllAttributes returned ", err.message);
                     }
                 });
 
-                if( ref.nodeClass !== "Variable ( 2)"){
+                if (ref.nodeClass !== "Variable ( 2)") {
 
                     expand_opcua_node_all(g_session, ref.nodeId, filter, function (err, results) {
 
                         if (err) {
-                            console.log(chalk.cyan(" Error auto browse "));
+                            console.log(" Error auto browse ");
                         }
-    
+
                     });
 
-                }else{
-                    console.log( "" );
-                    console.log( "###" + ref.nodeClass.toString() );
-                    console.log( "" );
-                }               
+                } else {
+                    console.log("");
+                    console.log("###" + ref.nodeClass.toString());
+                    console.log("");
+                }
 
 
             }
 
-        }else{
-            console.log( "Error browse: " + b.toString() )
+        } else {
+            console.log("Error browse: " + b.toString())
         }
         callback(err, children);
     });
@@ -337,12 +401,12 @@ function monitor_filtered_item(g_subscription, node_Id) {
         if (node_Id.toString() in monitoredFilteredItemsListData) {
 
 
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.value = dataValue.value;
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.statusCode = dataValue.statusCode;
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.serverTimestamp = dataValue.serverTimestamp.toString();
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.sourceTimestamp = dataValue.sourceTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].DataValue.value = dataValue.value;
+            monitoredFilteredItemsListData[node_Id.toString()].DataValue.statusCode = dataValue.statusCode;
+            monitoredFilteredItemsListData[node_Id.toString()].DataValue.serverTimestamp = dataValue.serverTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].DataValue.sourceTimestamp = dataValue.sourceTimestamp.toString();
 
-            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]));
+            console.log("Value change: " + monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
 
 
         }
@@ -384,7 +448,7 @@ function createNodeObject(node_Id, callback) {
 
     }
 
-    g_session.readAllAttributes(node_Id, function (err, nodesToRead, dataValues) {
+    the_session.readAllAttributes(node_Id, function (err, nodesToRead, dataValues) {
 
         var nodeObject = {};
         //console.log( JSON.stringify(dataValues));
