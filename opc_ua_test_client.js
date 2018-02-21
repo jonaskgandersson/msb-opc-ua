@@ -196,12 +196,7 @@ async.series([
 
 
 
-// Functions from OPC UA Commander
-
-
 function expand_opcua_node_all(g_session, node_Id, filter, callback) {
-
-    //g_session = the_session;
 
     if (!g_session) {
         return callback(new Error("No Connection"));
@@ -304,8 +299,8 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
     const monitoredItem = g_subscription.monitor({
         nodeId: node_Id,
-        attributeId: opcua.AttributeIds.Value
-        //, dataEncoding: { namespaceIndex: 0, name:null }
+        attributeId: opcua.AttributeIds.Value,
+        dataEncoding: { namespaceIndex: 0, name:null }
     },
         {
             samplingInterval: 10000,
@@ -321,7 +316,8 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
         if (!err) {
             monitoredFilteredItemsListData[node_Id.toString()] = data;
-            //console.log(JSON.stringify(data));
+            console.log( "Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
+            // console.log(JSON.stringify(data));
         }
         else {
             console.log("#createObject:" + err);
@@ -334,18 +330,20 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
     monitoredItem.on("changed", function (dataValue) {
 
+ //       console.log("Value change: \r\n" + JSON.stringify(dataValue));
 
         if (node_Id.toString() in monitoredFilteredItemsListData) {
 
 
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.value = dataValue.value;
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.statusCode = dataValue.statusCode;
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.serverTimestamp = dataValue.serverTimestamp.toString();
-            // monitoredFilteredItemsListData[node_Id.toString()].DataValue.sourceTimestamp = dataValue.sourceTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].value = dataValue.value;
+            monitoredFilteredItemsListData[node_Id.toString()].statusCode = dataValue.statusCode;
+            monitoredFilteredItemsListData[node_Id.toString()].serverTimestamp = dataValue.serverTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].sourceTimestamp = dataValue.sourceTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = (new Date()).toUTCString();
 
             // console.log("Value change: " +  monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": "  + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
 
-            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]) +" : " + JSON.stringify(dataValue));
+            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]) );
 
 
         }
@@ -372,119 +370,4 @@ function createNodeObject(node_Id, callback) {
             callback(err, null);
         }
     })
-}
-
-
-function readAttributes(session, nodes, callback) {
- 
-    assert(_.isFunction(callback));
- 
-    var isArray = _.isArray(nodes);
-    if (!isArray) {
-        nodes = [nodes];
-    }
-    
-    var nodesToRead = [];
-    nodes.forEach(function (node) {
-        var nodeId = opcua.resolveNodeId(node);
-        if (!nodeId) {
-            throw new Error("cannot coerce " + node + " to a valid NodeId");
-        }
-        nodesToRead = [
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.NodeId,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.BrowseName,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.Description,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.DataType,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.DisplayName,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.Value,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            },
-            {
-                nodeId: nodeId,
-                attributeId: opcua.AttributeIds.NodeClass,
-                indexRange: null,
-                dataEncoding: {namespaceIndex: 0, name: null}
-            }
-        ];
-    });
- 
-    session.read(nodesToRead, function (err, dataValues /*, diagnosticInfos */) {
-        if (err) return callback(err);
-
-        var results = composeResult(nodes, nodesToRead, dataValues);
-
-        callback(err, isArray ? results : results[0]);
-    });
- 
-};
-
-var keys = Object.keys(read_service.AttributeIds).filter(function (k) {
-    return k !== "INVALID";
-});
-
-function composeResult(nodes, nodesToRead, dataValues) {
- 
-    assert(nodesToRead.length === dataValues.length);
-    var i = 0, c = 0;
-    var results = [];
-    var dataValue, k, nodeToRead;
- 
-    for (var n = 0; n < nodes.length; n++) {
- 
-        var node = nodes[n];
- 
- 
-        var data = {};
-        data.node = node;
-        var addedProperty = 0;
- 
-        for (i = 0; i < nodesToRead.length; i++) {
-            dataValue = dataValues[c];
-            nodeToRead = nodesToRead[c];
-            c++;
-            if (dataValue.statusCode === opcua.StatusCodes.Good) {
-                k = utils.lowerFirstLetter(keys[i]);
-                data[k] = dataValue.value.value;
-                addedProperty += 1;
-            }
-        }
- 
-        if (addedProperty > 0) {
-            data.statusCode = opcua.StatusCodes.Good;
-        } else {
-            data.nodeId = resolveNodeId(node);
-            data.statusCode = opcua.StatusCodes.BadNodeIdUnknown;
-        }
-        results.push(data);
-    }
- 
-    return results;
 }
