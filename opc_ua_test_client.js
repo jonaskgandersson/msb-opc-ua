@@ -362,7 +362,7 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
 function createNodeObject(node_Id, callback) {
 
-    readAttributes(the_session, node_Id, function(err, result){
+    the_session.readAllAttributes(node_Id, function(err, result){
 
         if(!err)
         {
