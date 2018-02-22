@@ -337,12 +337,11 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
             monitoredFilteredItemsListData[node_Id.toString()].value = dataValue.value;
             monitoredFilteredItemsListData[node_Id.toString()].statusCode = dataValue.statusCode;
-            monitoredFilteredItemsListData[node_Id.toString()].serverTimestamp = dataValue.serverTimestamp.toString();
-            monitoredFilteredItemsListData[node_Id.toString()].sourceTimestamp = dataValue.sourceTimestamp.toString();
-            monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = (new Date()).toUTCString();
+            monitoredFilteredItemsListData[node_Id.toString()].serverTimestamp = dataValue.serverTimestamp;
+            monitoredFilteredItemsListData[node_Id.toString()].sourceTimestamp = dataValue.sourceTimestamp;
+            monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = new Date();
 
             // console.log("Value change: " +  monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": "  + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
-
             console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]) );
 
 
