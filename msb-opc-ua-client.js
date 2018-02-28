@@ -15,7 +15,7 @@ var port;
 var host;
 var enableLogging;
 var logLevel;
-var filer_AND;
+var filter_AND;
 var filter_OR;
 var filter_NOT;
 
@@ -24,6 +24,7 @@ var async;
 var _;
 var assert;
 var chalk;
+var mm;
 
 var NodeClass;
 var attributeIdtoString;
@@ -47,7 +48,9 @@ var the_session, the_subscription, endpointUrl;
 
 var monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
-filter_OR = ["current.value", "power.active.value"];
+filter_OR = ["*voltage*", "*power*"];
+filter_AND = ["*.value"];
+filter_NOT = [ "*active*", "*factor*"];
 
 var exports = module.exports = {
 
@@ -60,7 +63,7 @@ var exports = module.exports = {
         logLevel = this.GetPropertyValue('static', 'logLevel');
         enableLogging = this.GetPropertyValue('static', 'enableLogging');
 
-        this.AddNpmPackage('node-opcua, underscore, assert, chalk', true, function (err) {
+        this.AddNpmPackage('node-opcua, underscore, assert, chalk, micromatch', true, function (err) {
             me.Debug('STARTING');
             if (err === null || err === '') {
                 try {
@@ -72,6 +75,7 @@ var exports = module.exports = {
                     assert = require("assert");
                     chalk = require("chalk");
                     async = require("async");
+                    mm = require("micromatch");
 
                     NodeClass = opcua.NodeClass;
                     attributeIdtoString = _.invert(opcua.AttributeIds);
@@ -219,7 +223,7 @@ var exports = module.exports = {
 
                 var err;
                 //opcua.resolveNodeId("ObjectsFolder"), "ns=2;s=D0"
-                expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, function (err, results) {
+                expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, filter_AND, filter_NOT, function (err, results) {
 
                     if (err) {
                         console.log(chalk.cyan(" Error auto browse "));
@@ -255,9 +259,7 @@ var exports = module.exports = {
 };
 
 
-function expand_opcua_node_all(g_session, node_Id, filter, callback) {
-
-    //g_session = the_session;
+function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter_NOT, callback) {
 
     if (!g_session) {
         return callback(new Error("No Connection"));
@@ -297,47 +299,41 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                 // console.log( ref.toString() );
 
+                if (ref.nodeClass === opcua.NodeClass.Variable) {
+                    var nodeTemp = {
 
-                g_session.readAllAttributes(ref.nodeId, function (err, nodesToRead, dataValues) {
+                        nodeId: ref.nodeId,
+                        attributeId: opcua.AttributeIds.BrowseName,
+                        indexRange: null,
+                        dataEncoding: { namespaceIndex: 0, name: null }
+                    };
+                    g_session.read(nodeTemp, function (err, data) {
 
-                    if (!err) {
+                        if (!err) {
 
-                        for (let i = 0; i < nodesToRead.length; i++) {
+                            if (data.statusCode === opcua.StatusCodes.Good) {
 
-                            const nodeToRead = nodesToRead[i];
-                            const dataValue = dataValues[i];
+                                const s = data.value.value.toString();
 
-                            if (dataValue.statusCode !== opcua.StatusCodes.Good) {
-                                continue;
-                            }
+                                if ( mm.any( s, filter_OR, {nocase: true}) &&
+                                        mm.all( s, filter_AND, {nocase: true}) &&
+                                        !mm.any(s, filter_NOT, {nocase: true} )
+                                    ) {
 
-                            if (nodeToRead.attributeId == opcua.AttributeIds.BrowseName) {
+                                    //console.log(" Browse name: " + s);
+                                    monitor_filtered_item(the_subscription, ref.nodeId);
 
-
-                                const s = dataValue.value.value.toString();
-
-                                for (let i = 0; i < filter.length; i++) {
-
-                                    if (s.toLowerCase().indexOf(filter[i].toLocaleLowerCase()) > -1) {
-
-                                        console.log(" Browse name: " + s);
-                                        monitor_filtered_item(the_subscription, ref.nodeId);
-
-                                    }
                                 }
-
                             }
+
+                        } else {
+                            console.log("*************\r\n" + ref.toString() + "*************\r\n");
+                            //console.log("#readAllAttributes returned ", err.message);
                         }
-
-                    } else {
-                        console.log("*************" + ref.toString());
-                        //console.log("#readAllAttributes returned ", err.message);
-                    }
-                });
-
-                if (ref.nodeClass !== "Variable ( 2)") {
-
-                    expand_opcua_node_all(g_session, ref.nodeId, filter, function (err, results) {
+                    });
+                }
+                else {
+                    expand_opcua_node_all(g_session, ref.nodeId, filter_OR, filter_AND, filter_NOT, function (err, results) {
 
                         if (err) {
                             console.log(" Error auto browse ");
@@ -345,10 +341,6 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                     });
 
-                } else {
-                    console.log("");
-                    console.log("###" + ref.nodeClass.toString());
-                    console.log("");
                 }
 
 
@@ -367,8 +359,8 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
     const monitoredItem = g_subscription.monitor({
         nodeId: node_Id,
-        attributeId: opcua.AttributeIds.Value
-        //, dataEncoding: { namespaceIndex: 0, name:null }
+        attributeId: opcua.AttributeIds.Value,
+        dataEncoding: { namespaceIndex: 0, name: null }
     },
         {
             samplingInterval: 10000,
@@ -384,7 +376,8 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
         if (!err) {
             monitoredFilteredItemsListData[node_Id.toString()] = data;
-            //console.log(JSON.stringify(data));
+            console.log("Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
+            // console.log(JSON.stringify(data));
         }
         else {
             console.log("#createObject:" + err);
@@ -397,16 +390,19 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
     monitoredItem.on("changed", function (dataValue) {
 
+        //       console.log("Value change: \r\n" + JSON.stringify(dataValue));
 
         if (node_Id.toString() in monitoredFilteredItemsListData) {
 
 
-            monitoredFilteredItemsListData[node_Id.toString()].DataValue.value = dataValue.value;
-            monitoredFilteredItemsListData[node_Id.toString()].DataValue.statusCode = dataValue.statusCode;
-            monitoredFilteredItemsListData[node_Id.toString()].DataValue.serverTimestamp = dataValue.serverTimestamp.toString();
-            monitoredFilteredItemsListData[node_Id.toString()].DataValue.sourceTimestamp = dataValue.sourceTimestamp.toString();
+            monitoredFilteredItemsListData[node_Id.toString()].value = dataValue.value;
+            monitoredFilteredItemsListData[node_Id.toString()].statusCode = dataValue.statusCode;
+            monitoredFilteredItemsListData[node_Id.toString()].serverTimestamp = dataValue.serverTimestamp;
+            monitoredFilteredItemsListData[node_Id.toString()].sourceTimestamp = dataValue.sourceTimestamp;
+            monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = new Date();
 
-            console.log("Value change: " + monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
+            // console.log("Value change: " +  monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": "  + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
+            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()], null, 4));
 
 
         }
@@ -423,115 +419,13 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
 function createNodeObject(node_Id, callback) {
 
-    const attr = {};
-    var attrValue = {};
-
-    function append_text(prefix, s, attr) {
-
-        const str = s.replace(/ /g, '');
-        const a = str.split("\n");
-        if (a.length === 1) {
-            attr[prefix] = s;
-        } else {
-
-            for (let j = 1; j < a.length; j++) {
-
-                const b = a[j].split(":");
-
-                attrValue[b[0]] = b[1];
-
-            }
-
-            attr[a[0].replace(":", '')] = attrValue;
-
-        }
-
-    }
-
-    the_session.readAllAttributes(node_Id, function (err, nodesToRead, dataValues) {
-
-        var nodeObject = {};
-        //console.log( JSON.stringify(dataValues));
+    the_session.readAllAttributes(node_Id, function (err, result) {
 
         if (!err) {
-
-            for (let i = 0; i < nodesToRead.length; i++) {
-
-                const nodeToRead = nodesToRead[i];
-                const dataValue = dataValues[i];
-
-                if (dataValue.statusCode !== opcua.StatusCodes.Good) {
-                    continue;
-                }
-
-                const s = toString1(nodeToRead.attributeId, dataValue);
-                //console.log( "String: " + s);
-                append_text(attributeIdtoString[nodeToRead.attributeId], s, attr);
-
-            }
-
-            //console.log(JSON.stringify(attr));
-            callback(err, attr);
-
-        } else {
-            console.log("#createAttributeObject returned ", err.message);
-            callback(err, "null");
+            callback(err, result);
         }
-    });
-
-}
-
-// From OPC UA Commander source
-
-function dataValueToString(dataValue) {
-    if (!dataValue.value || dataValue.value.value === null) {
-        return "<???> : " + dataValue.statusCode.toString();
-    }
-    switch (dataValue.value.arrayType) {
-        case opcua.VariantArrayType.Scalar:
-            return dataValue.toString();
-        case opcua.VariantArrayType.Array:
-            return dataValue.toString();
-        default:
-            return "";
-    }
-}
-
-function toString1(attribute, dataValue) {
-
-    if (!dataValue || !dataValue.value || !dataValue.value.hasOwnProperty("value")) {
-        return "<null>";
-    }
-    switch (attribute) {
-        case opcua.AttributeIds.DataType:
-            return DataTypeIdsToString[dataValue.value.value.value] + " (" + dataValue.value.value.toString() + ")";
-        case opcua.AttributeIds.NodeClass:
-            return NodeClass.get(dataValue.value.value).key + " (" + dataValue.value.value + ")";
-        case opcua.AttributeIds.WriteMask:
-        case opcua.AttributeIds.UserWriteMask:
-            return " (" + dataValue.value.value + ")";
-        case opcua.AttributeIds.NodeId:
-        case opcua.AttributeIds.BrowseName:
-        case opcua.AttributeIds.DisplayName:
-        case opcua.AttributeIds.Description:
-        case opcua.AttributeIds.EventNotifier:
-        case opcua.AttributeIds.ValueRank:
-        case opcua.AttributeIds.ArrayDimensions:
-        case opcua.AttributeIds.Historizing:
-        case opcua.AttributeIds.Executable:
-        case opcua.AttributeIds.UserExecutable:
-        case opcua.AttributeIds.MinimumSamplingInterval:
-            if (!dataValue.value.value) {
-                return "null";
-            }
-            return dataValue.value.value.toString();
-        case opcua.AttributeIds.UserAccessLevel:
-        case opcua.AttributeIds.AccessLevel:
-            if (!dataValue.value.value) {
-                return "null";
-            }
-            return opcua.AccessLevelFlag.get(dataValue.value.value).key + " (" + dataValue.value.value + ")";
-        default:
-            return dataValueToString(dataValue);
-    }
+        else {
+            callback(err, null);
+        }
+    })
 }
