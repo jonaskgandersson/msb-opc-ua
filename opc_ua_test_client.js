@@ -4,9 +4,7 @@
  * To use this template, simply add your code in Start and Stop method
 
 */
-
-var utils = require("node-opcua-utils");
-var read_service = require("node-opcua-service-read");
+"use strict";
 
 var timerEvent; // In case you use a timer for fetching data
 var interval;
@@ -14,7 +12,7 @@ var port;
 var host;
 var enableLogging;
 var logLevel;
-var filer_AND;
+var filter_AND;
 var filter_OR;
 var filter_NOT;
 
@@ -28,11 +26,14 @@ var the_session, the_subscription, endpointUrl;
 
 const monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
-filter_OR = ["voltage.value", "power.active.value"];
+filter_OR = ["*voltage*", "*power*"];
+filter_AND = ["*.value"];
+filter_NOT = [ "*active*", "*factor*"];
 
 const _ = require("underscore");
 const assert = require("assert");
 const chalk = require("chalk");
+const mm = require('micromatch');
 
 opcua = require("node-opcua");
 async = require("async");
@@ -51,12 +52,12 @@ const data = {
     receivedBytes: 0,
     sentBytes: 0,
     sentChunks: 0,
-    receivedChunks:0,
-    backoffCount:0,
-    transactionCount:0,
+    receivedChunks: 0,
+    backoffCount: 0,
+    transactionCount: 0,
 };
 
-client.on("send_request",function() {
+client.on("send_request", function () {
     data.transactionCount++;
 });
 
@@ -71,23 +72,23 @@ client.on("receive_chunk", function (chunk) {
 });
 
 client.on("backoff", function (number, delay) {
-    data.backoffCount+=1;
-    console.log(chalk.yellow(`backoff  attempt #${number} retrying in ${delay/1000.0} seconds`));
+    data.backoffCount += 1;
+    console.log(chalk.yellow(`backoff  attempt #${number} retrying in ${delay / 1000.0} seconds`));
 });
 
 client.on("start_reconnection", function () {
-    console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! "+ endpointUrl));
+    console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl));
 });
 
 client.on("connection_reestablished", function () {
-    console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! "+ endpointUrl));
+    console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl));
     data.reconnectionCount++;
 });
 
 // monitoring des lifetimes
 client.on("lifetime_75", function (token) {
     if (true) {
-        console.log(chalk.red("received lifetime_75 on "+ endpointUrl));
+        console.log(chalk.red("received lifetime_75 on " + endpointUrl));
     }
 });
 
@@ -144,16 +145,16 @@ async.series([
 
 
 
-           // assert(the_session);
-            const parameters = {
-                requestedPublishingInterval: 100,
-                requestedLifetimeCount: 1000,
-                requestedMaxKeepAliveCount: 12,
-                maxNotificationsPerPublish: 100,
-                publishingEnabled: true,
-                priority: 10
-            };
-            the_subscription = new opcua.ClientSubscription(the_session, parameters);
+        // assert(the_session);
+        const parameters = {
+            requestedPublishingInterval: 100,
+            requestedLifetimeCount: 1000,
+            requestedMaxKeepAliveCount: 12,
+            maxNotificationsPerPublish: 100,
+            publishingEnabled: true,
+            priority: 10
+        };
+        the_subscription = new opcua.ClientSubscription(the_session, parameters);
 
         callback(err);
 
@@ -163,7 +164,7 @@ async.series([
 
         var err;
         //opcua.resolveNodeId("ObjectsFolder"), "ns=2;s=D0"
-        expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, function (err, results) {
+        expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, filter_AND, filter_NOT, function (err, results) {
 
             if (err) {
                 console.log(chalk.cyan(" Error auto browse "));
@@ -196,7 +197,7 @@ async.series([
 
 
 
-function expand_opcua_node_all(g_session, node_Id, filter, callback) {
+function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter_NOT, callback) {
 
     if (!g_session) {
         return callback(new Error("No Connection"));
@@ -223,7 +224,7 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
         }
 
     ];
-    
+
     g_session.browse(b, function (err, results) {
 
         if (!err) {
@@ -236,33 +237,31 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
 
                 // console.log( ref.toString() );
 
-                if( ref.nodeClass === opcua.NodeClass.Variable)
-                {
+                if (ref.nodeClass === opcua.NodeClass.Variable) {
                     var nodeTemp = {
 
                         nodeId: ref.nodeId,
                         attributeId: opcua.AttributeIds.BrowseName,
                         indexRange: null,
-                        dataEncoding: {namespaceIndex: 0, name: null}
+                        dataEncoding: { namespaceIndex: 0, name: null }
                     };
                     g_session.read(nodeTemp, function (err, data) {
 
-                        if (!err) {                        
+                        if (!err) {
 
                             if (data.statusCode === opcua.StatusCodes.Good) {
 
                                 const s = data.value.value.toString();
 
-                                for (let i = 0; i < filter.length; i++) {
+                                if ( mm.any( s, filter_OR, {nocase: true}) &&
+                                        mm.all( s, filter_AND, {nocase: true}) &&
+                                        !mm.any(s, filter_NOT, {nocase: true} )
+                                    ) {
 
-                                    if (s.toLowerCase().indexOf(filter[i].toLocaleLowerCase()) > -1) {
+                                    //console.log(" Browse name: " + s);
+                                    monitor_filtered_item(the_subscription, ref.nodeId);
 
-                                        console.log(" Browse name: " + s);
-                                        monitor_filtered_item(the_subscription, ref.nodeId);
-
-                                    }
-                                } 
-                                
+                                }
                             }
 
                         } else {
@@ -271,9 +270,8 @@ function expand_opcua_node_all(g_session, node_Id, filter, callback) {
                         }
                     });
                 }
-                else
-                {
-                    expand_opcua_node_all(g_session, ref.nodeId, filter, function (err, results) {
+                else {
+                    expand_opcua_node_all(g_session, ref.nodeId, filter_OR, filter_AND, filter_NOT, function (err, results) {
 
                         if (err) {
                             console.log(" Error auto browse ");
@@ -300,7 +298,7 @@ function monitor_filtered_item(g_subscription, node_Id) {
     const monitoredItem = g_subscription.monitor({
         nodeId: node_Id,
         attributeId: opcua.AttributeIds.Value,
-        dataEncoding: { namespaceIndex: 0, name:null }
+        dataEncoding: { namespaceIndex: 0, name: null }
     },
         {
             samplingInterval: 10000,
@@ -316,7 +314,7 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
         if (!err) {
             monitoredFilteredItemsListData[node_Id.toString()] = data;
-            console.log( "Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
+            console.log("Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
             // console.log(JSON.stringify(data));
         }
         else {
@@ -330,7 +328,7 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
     monitoredItem.on("changed", function (dataValue) {
 
- //       console.log("Value change: \r\n" + JSON.stringify(dataValue));
+        //       console.log("Value change: \r\n" + JSON.stringify(dataValue));
 
         if (node_Id.toString() in monitoredFilteredItemsListData) {
 
@@ -342,7 +340,7 @@ function monitor_filtered_item(g_subscription, node_Id) {
             monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = new Date();
 
             // console.log("Value change: " +  monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": "  + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
-            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]) );
+            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()]));
 
 
         }
@@ -359,13 +357,12 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
 function createNodeObject(node_Id, callback) {
 
-    the_session.readAllAttributes(node_Id, function(err, result){
+    the_session.readAllAttributes(node_Id, function (err, result) {
 
-        if(!err)
-        {
+        if (!err) {
             callback(err, result);
         }
-        else{
+        else {
             callback(err, null);
         }
     })
