@@ -43,14 +43,24 @@ var clientData = {
     transactionCount: 0,
 };
 
+var options = {
+    endpoint_must_exist: false,
+    keepSessionAlive: true,
+    connectionStrategy: {
+        maxRetry: 10,
+        initialDelay: 2000,
+        maxDelay: 10*1000
+    }
+};
+
 
 var the_session, the_subscription, endpointUrl;
 
 var monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
-filter_OR = ["*voltage*", "*power*"];
-filter_AND = ["*.value"];
-filter_NOT = [ "*active*", "*factor*"];
+filter_OR = ["*"];  //["*voltage*", "*power*"];
+filter_AND = [];    //["*.value"];
+filter_NOT = [];    //[ "*active*", "*factor*"];
 
 var exports = module.exports = {
 
@@ -63,17 +73,14 @@ var exports = module.exports = {
         logLevel = this.GetPropertyValue('static', 'logLevel');
         enableLogging = this.GetPropertyValue('static', 'enableLogging');
 
-        this.AddNpmPackage('node-opcua, underscore, assert, chalk, micromatch', true, function (err) {
+        this.AddNpmPackage('node-opcua,assert,chalk,micromatch', true, function (err) {
             me.Debug('STARTING');
             if (err === null || err === '') {
                 try {
 
                     opcua = require("node-opcua"); // OPC UA Lib
-
-                    require("colors");
                     _ = require("underscore");
                     assert = require("assert");
-                    chalk = require("chalk");
                     async = require("async");
                     mm = require("micromatch");
 
@@ -81,11 +88,11 @@ var exports = module.exports = {
                     attributeIdtoString = _.invert(opcua.AttributeIds);
                     DataTypeIdsToString = _.invert(opcua.DataTypeIds);
 
-                    client = new opcua.OPCUAClient();
+                    client = new opcua.OPCUAClient(options);
 
                     endpointUrl = "opc.tcp://" + host + ":" + port;
 
-                    client.on("send_request", function () {
+ /*                   client.on("send_request", function () {
                         clientData.transactionCount++;
                     });
 
@@ -101,32 +108,32 @@ var exports = module.exports = {
 
                     client.on("backoff", function (number, delay) {
                         clientData.backoffCount += 1;
-                        console.log(chalk.yellow(`backoff  attempt #${number} retrying in ${delay / 1000.0} seconds`));
+                        me.Debug('backoff  attempt #${number} retrying in ${delay / 1000.0} seconds');
                     });
 
                     client.on("start_reconnection", function () {
-                        console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl));
+                        me.Debug(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl);
                     });
 
                     client.on("connection_reestablished", function () {
-                        console.log(chalk.red(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl));
+                        me.Debug(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl);
                         clientData.reconnectionCount++;
                     });
 
                     // monitoring des lifetimes
                     client.on("lifetime_75", function (token) {
                         if (true) {
-                            console.log(chalk.red("received lifetime_75 on " + endpointUrl));
+                            me.Debug("received lifetime_75 on " + endpointUrl);
                         }
                     });
 
                     client.on("security_token_renewed", function () {
                         clientData.tokenRenewalCount += 1;
                         if (true) {
-                            console.log(chalk.green(" security_token_renewed on " + endpointUrl));
+                            me.Debug(" security_token_renewed on " + endpointUrl);
                         }
                     });
-
+*/
                     me.Process();
 
                 }
@@ -170,9 +177,9 @@ var exports = module.exports = {
             function (callback) {
                 client.connect(endpointUrl, function (err) {
                     if (err) {
-                        console.log(" cannot connect to endpoint :", endpointUrl);
+                        me.Debug(" cannot connect to endpoint : " + endpointUrl);
                     } else {
-                        console.log("connected !");
+                        me.Debug("***connected !");
                     }
                     callback(err);
                 });
@@ -183,22 +190,24 @@ var exports = module.exports = {
                 client.createSession(function (err, session) {
                     if (!err) {
                         the_session = session;
+                         me.Debug("Session created !");
                     }
                     callback(err);
                 });
             },
-
-            // step 3 : read a variable with readVariableValue
-            function (callback) {
-                the_session.readVariableValue("ns=2;s=3", function (err, dataValue) {
-                    if (!err) {
-                        console.log(" C2 = " + dataValue.toString());
-                    }
-                    callback(err);
-                });
-
-
+              // step 4 : read a variable with readVariableValue
+            function(callback) {
+               the_session.readVariableValue("ns=2;s=1", function(err,dataValue) {
+                   if (!err) {
+                       me.Debug(" C0 = " , dataValue.toString());
+                   }
+                   callback(err);
+               });
+               
+               
             },
+
+
             // step 5: install a subscription and install a monitored item for 10 seconds
             function (callback) {
 
@@ -214,6 +223,8 @@ var exports = module.exports = {
                     priority: 10
                 };
                 the_subscription = new opcua.ClientSubscription(the_session, parameters);
+                
+                me.Debug("Subscription created !");
 
                 callback(err);
 
@@ -226,7 +237,7 @@ var exports = module.exports = {
                 expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, filter_AND, filter_NOT, function (err, results) {
 
                     if (err) {
-                        console.log(chalk.cyan(" Error auto browse "));
+                        me.Debug(" Error auto browse ");
                     }
                 });
 
@@ -247,9 +258,9 @@ var exports = module.exports = {
         ],
             function (err) {
                 if (err) {
-                    console.log(" failure ", err);
+                    me.Debug(" failure " + err);
                 } else {
-                    console.log("done!");
+                    me.Debug("done!");
                 }
                 //client.disconnect(function () { });
             });
@@ -327,7 +338,7 @@ function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter
                             }
 
                         } else {
-                            console.log("*************\r\n" + ref.toString() + "*************\r\n");
+                            me.Debug("*************\r\n" + ref.toString() + "*************\r\n");
                             //console.log("#readAllAttributes returned ", err.message);
                         }
                     });
@@ -336,7 +347,7 @@ function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter
                     expand_opcua_node_all(g_session, ref.nodeId, filter_OR, filter_AND, filter_NOT, function (err, results) {
 
                         if (err) {
-                            console.log(" Error auto browse ");
+                            me.Debug(" Error auto browse ");
                         }
 
                     });
@@ -347,7 +358,7 @@ function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter
             }
 
         } else {
-            console.log("Error browse: " + b.toString())
+            me.Debug("Error browse: " + b.toString())
         }
         callback(err, children);
     });
@@ -376,11 +387,11 @@ function monitor_filtered_item(g_subscription, node_Id) {
 
         if (!err) {
             monitoredFilteredItemsListData[node_Id.toString()] = data;
-            console.log("Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
+            me.Debug("Add " + monitoredFilteredItemsListData[node_Id.toString()].browseName.name.toString() + " to monitoring list");
             // console.log(JSON.stringify(data));
         }
         else {
-            console.log("#createObject:" + err);
+            me.Debug("#createObject:" + err);
         }
     });
 
@@ -402,12 +413,12 @@ function monitor_filtered_item(g_subscription, node_Id) {
             monitoredFilteredItemsListData[node_Id.toString()].clientTimestamp = new Date();
 
             // console.log("Value change: " +  monitoredFilteredItemsListData[node_Id.toString()].BrowseName.toString() + ": "  + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()].DataValue.value.value));
-            console.log("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()], null, 4));
+            me.Debug("Value change: " + JSON.stringify(monitoredFilteredItemsListData[node_Id.toString()], null, 4));
 
 
         }
         else {
-            console.log(" Unknown nodeId: " + node_Id.toString());
+            me.Debug(" Unknown nodeId: " + node_Id.toString());
         }
 
         //console.log(" value ", dataValue.toString(), node_Id.toString(), " changed to ", chalk.green(dataValue.value.toString()));
