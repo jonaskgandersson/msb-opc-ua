@@ -26,9 +26,9 @@ var the_session, the_subscription, endpointUrl;
 
 const monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
-filter_OR = ["*voltage*", "*power*"];
-filter_AND = ["*.value"];
-filter_NOT = [ "*active*", "*factor*"];
+filter_OR = ["*"];//["*voltage*", "*power*"];
+filter_AND = [];//["*.value"];
+filter_NOT = [];//[ "*active*", "*factor*"];
 
 const _ = require("underscore");
 const assert = require("assert");
@@ -42,9 +42,18 @@ const NodeClass = opcua.NodeClass;
 const attributeIdtoString = _.invert(opcua.AttributeIds);
 const DataTypeIdsToString = _.invert(opcua.DataTypeIds);
 
+var options = {
+    endpoint_must_exist: false,
+    keepSessionAlive: true,
+    connectionStrategy: {
+        maxRetry: 10,
+        initialDelay: 2000,
+        maxDelay: 10*1000
+    }
+};
 
 //services
-client = new opcua.OPCUAClient();
+client = new opcua.OPCUAClient(options);
 
 const data = {
     reconnectionCount: 0,
@@ -101,7 +110,7 @@ client.on("security_token_renewed", function () {
 
 
 //browseDirection = new opcua.BrowseDirection();
-endpointUrl = "opc.tcp://" + "192.168.200.55" + ":" + 4840;
+endpointUrl = "opc.tcp://" + "192.168.200.10" + ":" + 4840;
 
 async.series([
 
