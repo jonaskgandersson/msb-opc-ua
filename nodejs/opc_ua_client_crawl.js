@@ -33,6 +33,7 @@ var DataTypeIdsToString;
 var client;
 
 var makeRelativePath;
+var makeBrowsePath
 
 var clientData = {
     reconnectionCount: 0,
@@ -83,6 +84,8 @@ try {
     util = require('util');
     fs = require('fs')
     path = require('path');
+
+    makeBrowsePath = opcua.makeBrowsePath;
 
     makeRelativePath = require("D:/@Git/msb-opc-ua/node_modules/node-opcua-service-translate-browse-path/src/make_relative_path.js").makeRelativePath;
 
@@ -138,7 +141,7 @@ try {
         }
     });
 
-    var configPath = path.join( __dirname, 'clientConfig.json')
+    var configPath = path.join(__dirname, 'clientConfig.json')
     var config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     Process();
@@ -201,7 +204,24 @@ function Process(message, context) {
         // step 4: crawl namespace of server
         function (callback) {
 
-            var relativePath = makeRelativePath("/3:Truck.0:NodeVersion");
+            // var relativePath = makeRelativePath("/2:Frequency");
+
+            const browsePath = [
+                makeBrowsePath("RootFolder","/Objects/2:[ProcessingUnit]"),
+                makeBrowsePath("RootFolder","/Objects/Server")
+                
+            ];
+
+            the_session.translateBrowsePath(browsePath, function (err, results) {
+
+                if (!err) {
+                    console.log("Success");
+                }
+                else{
+                    console.log("Error");
+                }
+
+            });
 
             const crawler = new NodeCrawler(the_session);
 
@@ -212,18 +232,17 @@ function Process(message, context) {
                 // console.log("->",element.browseName.name,element.nodeId.toString());
             });
 
-            // const nodeId = opcua.resolveNodeId("ns=2;s=Real Devices");
             const nodeId = opcua.resolveNodeId("ObjectsFolder");
 
             console.log("now crawling object folder ...please wait...");
             crawler.read(nodeId, function (err, obj) {
 
-                // fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');
+                 fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');
 
                 if (!err) {
-                    // treeify.asLines(obj, true, true, function (line) {
-                    //     console.log(line);
-                    // });
+                    treeify.asLines(obj, true, true, function (line) {
+                        console.log(line);
+                    });
 
 
                 }
