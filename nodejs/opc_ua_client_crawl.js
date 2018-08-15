@@ -32,6 +32,8 @@ var DataTypeIdsToString;
 
 var client;
 
+var makeRelativePath;
+
 var clientData = {
     reconnectionCount: 0,
     tokenRenewalCount: 0,
@@ -81,6 +83,8 @@ try {
     util = require('util');
     fs = require('fs')
     path = require('path');
+
+    makeRelativePath = require("D:/@Git/msb-opc-ua/node_modules/node-opcua-service-translate-browse-path/src/make_relative_path.js").makeRelativePath;
 
     NodeCrawler = opcua.NodeCrawler;
 
@@ -196,6 +200,8 @@ function Process(message, context) {
 
         // step 4: crawl namespace of server
         function (callback) {
+
+            var relativePath = makeRelativePath("/3:Truck.0:NodeVersion");
 
             const crawler = new NodeCrawler(the_session);
 
