@@ -1,0 +1,9 @@
+node_modules
+index2.js
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+.vscode/launch.json
+!.vscode/extensions.json
+
