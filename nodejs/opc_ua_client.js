@@ -32,8 +32,6 @@ var assert;
 var chalk;
 var mm;
 
-var util;
-
 var NodeClass;
 var attributeIdtoString;
 var DataTypeIdsToString;
@@ -66,22 +64,12 @@ var the_session, the_subscription, endpointUrl;
 
 var monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
 
-var NodeCrawler;
-var treeify;
-var fs;
-
-
-//filter_OR = ["*voltage*", "*power*"];
-//filter_AND = ["*.value"];
-//filter_NOT = [];    //[ "*active*", "*factor*"];
+filter_OR = ["*voltage*", "*power*"];
+filter_AND = ["*.value"];
+filter_NOT = [];    //[ "*active*", "*factor*"];
 
 port = "4840";
 host = "192.168.200.55";
-
-filter_AND = ["*.value"];
-filter_OR = ["*voltage*", "*power*"];
-filter_NOT = [];
-
 
 console.log('STARTING');
 
@@ -92,13 +80,6 @@ try {
     assert = require("assert");
     async = require("async");
     mm = require("micromatch");
-
-    treeify = require("treeify");
-
-    util = require('util');
-    fs = require('fs')
-
-    NodeCrawler = opcua.NodeCrawler;
 
     NodeClass = opcua.NodeClass;
     attributeIdtoString = _.invert(opcua.AttributeIds);
@@ -221,86 +202,18 @@ function Process(message, context) {
 
         function (callback) {
 
-            const crawler = new NodeCrawler(the_session);
+            var err;
+            //opcua.resolveNodeId("ObjectsFolder"), "ns=2;s=D0"
+            expand_opcua_node_all(the_session, opcua.resolveNodeId("ObjectsFolder"), filter_OR, filter_AND, filter_NOT, function (err, results) {
 
-            crawler.maxNodesPerRead = 10;
-            crawler.maxNodesPerBrowse = 2;
-
-            // const data = {};
-
-            // let t = Date.now();
-            // client.on("send_request", function () {
-            //     t1 = Date.now();
-            // });
-
-
-            //client.on("receive_response", print_stat);
-
-            // t = Date.now();
-            //xx crawler.on("browsed", function (element) {
-            //xx     console.log("->",(new Date()).getTime()-t,element.browseName.name,element.nodeId.toString());
-            //xx });
-
-            // "ns=2;s=Actemium [ProcessingUnit]" //ObjectsFolder "Real Devices" D0 
-            // const nodeId = opcua.resolveNodeId("ns=2;s=D0");
-            //const nodeId =  opcua.makeNodeId(opcua.ObjectIds.Server);
-            // console.log("now crawling object folder ...please wait...");
-            // crawler.read(nodeId, function (err, obj) {
-            //     console.log(" Time         = ", (new Date()).getTime() - t);
-            //     console.log(" read        = ", crawler.readCounter);
-            //     console.log(" browse      = ", crawler.browseCounter);
-            //     console.log(" transaction = ", crawler.transactionCounter);
-            //     if (!err) {
-
-
-            //         console.log("Crawl done!");
-
-            //     }
-            //     //client.removeListener("receive_response", print_stat);
-            //     callback(err);
-            // });
-
-            // crawler.on("browsed", function (nodeElement, data) {
-            //     console.log("Crawler browsed data: " + data)
-            // });
-
-            // crawler.crawl(nodeId, data, function (err) {
-            //     if (err) {
-            //         console.log("Crawler done error: " + err);
-            //         return;
-            //     }
-            //     crawler.crawl(nodeId, data, function (err) {
-            //         console.log("Crawler done error: " + err);
-            //     });
-
-            // });
-
-
-            crawler.on("browsed", function (element) {
-                // console.log("->",element.browseName.name,element.nodeId.toString());
-            });
-
-            // const nodeId = opcua.resolveNodeId("ns=2;s=Real Devices");
-            const nodeId = opcua.resolveNodeId("ObjectsFolder");
-
-            console.log("now crawling object folder ...please wait...");
-            crawler.read(nodeId, function (err, obj) {
-
-                // fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');
-
-                if (!err) {
-                    // treeify.asLines(obj, true, true, function (line) {
-                    //     console.log(line);
-                    // });
-
-                    
+                if (err) {
+                    console.log(" Error auto browse ");
                 }
-                callback(err);
             });
 
+            callback(err);
 
         },
-
 
         // close session
         function (callback) {
@@ -321,6 +234,7 @@ function Process(message, context) {
             }
             //client.disconnect(function () { });
         });
+
 }
 
 
@@ -381,10 +295,10 @@ function expand_opcua_node_all(g_session, node_Id, filter_OR, filter_AND, filter
 
                                 const s = data.value.value.toString();
 
-                                if (mm.any(s, filter_OR, { nocase: true }) &&
-                                    mm.all(s, filter_AND, { nocase: true }) &&
-                                    !mm.any(s, filter_NOT, { nocase: true })
-                                ) {
+                                if ( mm.any( s, filter_OR, {nocase: true}) &&
+                                        mm.all( s, filter_AND, {nocase: true}) &&
+                                        !mm.any(s, filter_NOT, {nocase: true} )
+                                    ) {
 
                                     //console.log(" Browse name: " + s);
                                     monitor_filtered_item(the_subscription, ref.nodeId);
@@ -494,67 +408,4 @@ function createNodeObject(node_Id, callback) {
             callback(err, null);
         }
     })
-}
-
-function enumerateAllConditionTypes(the_session, callback) {
-
-    const tree = {};
-
-    const conditionEventTypes = {};
-
-    function findAllNodeOfType(tree, typeNodeId, browseName, callback) {
-
-        const browseDesc1 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasSubtype"),
-            browseDirection: opcua.browse_service.BrowseDirection.Forward,
-            includeSubtypes: true,
-            resultMask: 63
-
-        };
-        const browseDesc2 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasTypeDefinition"),
-            browseDirection: opcua.browse_service.BrowseDirection.Inverse,
-            includeSubtypes: true,
-            resultMask: 63
-
-        };
-        const browseDesc3 = {
-            nodeId: typeNodeId,
-            referenceTypeId: opcua.resolveNodeId("HasTypeDefinition"),
-            browseDirection: opcua.browse_service.BrowseDirection.Forward,
-            includeSubtypes: true,
-            resultMask: 63
-
-        };
-
-        const nodesToBrowse = [
-            browseDesc1,
-            browseDesc2,
-            browseDesc3
-        ];
-        the_session.browse(nodesToBrowse, function (err, browseResults) {
-
-            //xx console.log(" exploring".yellow ,browseName.cyan, typeNodeId.toString());
-            tree[browseName] = {};
-            if (!err) {
-                browseResults[0].references = browseResults[0].references || [];
-                async.forEach(browseResults[0].references, function (el, _inner_callback) {
-                    conditionEventTypes[el.nodeId.toString()] = el.browseName.toString();
-                    findAllNodeOfType(tree[browseName], el.nodeId, el.browseName.toString(), _inner_callback);
-                }, callback);
-            } else {
-                callback(err);
-            }
-        });
-    }
-
-    const typeNodeId = opcua.resolveNodeId("ConditionType");
-    findAllNodeOfType(tree, typeNodeId, "ConditionType", function (err) {
-        if (!err) {
-            return callback(null, conditionEventTypes, tree);
-        }
-        callback(err);
-    });
 }

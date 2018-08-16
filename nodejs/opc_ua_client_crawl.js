@@ -32,6 +32,9 @@ var DataTypeIdsToString;
 
 var client;
 
+var makeRelativePath;
+var makeBrowsePath
+
 var clientData = {
     reconnectionCount: 0,
     tokenRenewalCount: 0,
@@ -134,7 +137,7 @@ try {
         }
     });
 
-    var configPath = path.join( __dirname, 'clientConfig.json')
+    var configPath = path.join(__dirname, 'clientConfig.json')
     var config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
     Process();
@@ -206,18 +209,17 @@ function Process(message, context) {
                 // console.log("->",element.browseName.name,element.nodeId.toString());
             });
 
-            // const nodeId = opcua.resolveNodeId("ns=2;s=Real Devices");
             const nodeId = opcua.resolveNodeId("ObjectsFolder");
 
             console.log("now crawling object folder ...please wait...");
             crawler.read(nodeId, function (err, obj) {
 
-                // fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');
+                 fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');
 
                 if (!err) {
-                    // treeify.asLines(obj, true, true, function (line) {
-                    //     console.log(line);
-                    // });
+                    treeify.asLines(obj, true, true, function (line) {
+                        console.log(line);
+                    });
 
 
                 }

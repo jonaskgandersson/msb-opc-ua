@@ -1,0 +1,188 @@
+{
+    "browseName": "Objects",
+    "nodeId": "ns=0;i=85",
+    "nodeClass": "Object",
+    "typeDefinition": "FolderType",
+    "hasComponent": [
+        {
+            "browseName": " [ProcessingUnit]",
+            "nodeId": "ns=2;s= [ProcessingUnit]",
+            "typeDefinition": "FolderType",
+            "hasComponent": [
+                {
+                    "browseName": "Real Devices",
+                    "nodeId": "ns=2;s=Real Devices",
+                    "organizes": [
+                        {
+                            "browseName": "CMCIII-HUM [CMCIII-HUM]",
+                            "nodeId": "ns=2;s=D1",
+                            "organizes": [
+                                {
+                                    "browseName": "Temperature",
+                                    "nodeId": "ns=2;s=F1.Temperature",
+                                    "organizes": [
+                                        {
+                                            "browseName": "DescName",
+                                            "nodeId": "ns=2;s=V1.0",
+                                            "dataType": "ns=0;i=12",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Value",
+                                            "nodeId": "ns=2;s=V1.1",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "27.4",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtHighAlarm",
+                                            "nodeId": "ns=2;s=V1.2",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "40",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtHighWarning",
+                                            "nodeId": "ns=2;s=V1.3",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "35",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtLowWarning",
+                                            "nodeId": "ns=2;s=V1.4",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "10",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtLowAlarm",
+                                            "nodeId": "ns=2;s=V1.5",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "5",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Hysteresis",
+                                            "nodeId": "ns=2;s=V1.6",
+                                            "dataType": "ns=0;i=11",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Status",
+                                            "nodeId": "ns=2;s=V1.7",
+                                            "dataType": "ns=0;i=6",
+                                            "dataValue": "4",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Category",
+                                            "nodeId": "ns=2;s=V1.8",
+                                            "dataType": "ns=0;i=6",
+                                            "dataValue": "80",
+                                            "typeDefinition": "PropertyType"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "browseName": "Humidity",
+                                    "nodeId": "ns=2;s=F1.Humidity",
+                                    "organizes": [
+                                        {
+                                            "browseName": "DescName",
+                                            "nodeId": "ns=2;s=V1.9",
+                                            "dataType": "ns=0;i=12",
+                                            "dataValue": "Humidity",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Value",
+                                            "nodeId": "ns=2;s=V1.10",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "38.5",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtHighAlarm",
+                                            "nodeId": "ns=2;s=V1.11",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "80",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtHighWarning",
+                                            "nodeId": "ns=2;s=V1.12",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "75",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtLowWarning",
+                                            "nodeId": "ns=2;s=V1.13",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "10",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "SetPtLowAlarm",
+                                            "nodeId": "ns=2;s=V1.14",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "5",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Hysteresis",
+                                            "nodeId": "ns=2;s=V1.15",
+                                            "dataType": "ns=0;i=11",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Status",
+                                            "nodeId": "ns=2;s=V1.16",
+                                            "dataType": "ns=0;i=6",
+                                            "dataValue": "4",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Category",
+                                            "nodeId": "ns=2;s=V1.17",
+                                            "dataType": "ns=0;i=6",
+                                            "dataValue": "80",
+                                            "typeDefinition": "PropertyType"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "browseName": "Dew Point",
+                                    "nodeId": "ns=2;s=F1.Dew Point",
+                                    "organizes": [
+                                        {
+                                            "browseName": "DescName",
+                                            "nodeId": "ns=2;s=V1.18",
+                                            "dataType": "ns=0;i=12",
+                                            "dataValue": "Dew Point",
+                                            "typeDefinition": "PropertyType"
+                                        },
+                                        {
+                                            "browseName": "Value",
+                                            "nodeId": "ns=2;s=V1.19",
+                                            "dataType": "ns=0;i=11",
+                                            "dataValue": "12",
+                                            "typeDefinition": "PropertyType"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "typeDefinition": "Real Devices"
+                },
+                {
+                    "browseName": "Virtual Devices",
+                    "nodeId": "ns=2;s=Virtual Devices",
+                    "typeDefinition": "Virtual Devices"
+                }
+            ]
+        }
+    ]
+}
