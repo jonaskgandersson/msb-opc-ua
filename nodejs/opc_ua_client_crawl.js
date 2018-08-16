@@ -85,10 +85,6 @@ try {
     fs = require('fs')
     path = require('path');
 
-    makeBrowsePath = opcua.makeBrowsePath;
-
-    makeRelativePath = require("D:/@Git/msb-opc-ua/node_modules/node-opcua-service-translate-browse-path/src/make_relative_path.js").makeRelativePath;
-
     NodeCrawler = opcua.NodeCrawler;
 
     NodeClass = opcua.NodeClass;
@@ -203,25 +199,6 @@ function Process(message, context) {
 
         // step 4: crawl namespace of server
         function (callback) {
-
-            // var relativePath = makeRelativePath("/2:Frequency");
-
-            const browsePath = [
-                makeBrowsePath("RootFolder","/Objects/2:[ProcessingUnit]"),
-                makeBrowsePath("RootFolder","/Objects/Server")
-                
-            ];
-
-            the_session.translateBrowsePath(browsePath, function (err, results) {
-
-                if (!err) {
-                    console.log("Success");
-                }
-                else{
-                    console.log("Error");
-                }
-
-            });
 
             const crawler = new NodeCrawler(the_session);
 
