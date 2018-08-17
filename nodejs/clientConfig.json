@@ -23,17 +23,39 @@
                 "priority": 10
             },
             "monitor": {
-                "rootNode":{
+                "rootNode": {
                     "browseName": "RootFolder",
-                    "nodeId" : null
+                    "nodeId": null
+                },
+                "settings": {
+                    "samplingInterval": 10000,
+                    "discardOldest": true,
+                    "queueSize": 100
+                },
+                "crawl": {
+                    "any": [
+                        "*voltage*",
+                        "*power*"
+                    ],
+                    "all": [
+                        "*.value"
+                    ],
+                    "not": [
+                        ""
+                    ]
                 },
                 "nodes": [
                     {
-                        "browsePath" : "/Objects/Server/",
-                        "nodeId": null
+                        "browsePath": "Objects.Server",
+                        "nodeId": null,
+                        "settings": {
+                            "samplingInterval": 10000,
+                            "discardOldest": true,
+                            "queueSize": 100
+                        }
                     },
                     {
-                        "browsePath" : null,
+                        "browsePath": null,
                         "nodeId": "ns=2;s=Real Devices"
                     }
                 ]
