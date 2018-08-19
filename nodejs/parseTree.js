@@ -17,7 +17,7 @@ traverse(data).forEach(function (x) {
         
         var nodeBrowsePath = parentsToStringPath(this.parents);
 
-        findBrowseMatch( nodeBrowsePath, config );
+        findBrowseMatch( nodeBrowsePath, config.server.session.monitor.nodes );
 
         if (mm.any(nodeBrowsePath, config.server.session.monitor.crawl.any, { nocase: true }) &&
             mm.all(nodeBrowsePath, config.server.session.monitor.crawl.all, { nocase: true }) &&
@@ -53,7 +53,7 @@ function findBrowseMatch(browsePath, configData){
 
     traverse(configData).forEach(function(x){
         if (this.isLeaf && this.key === "browsePath") {
-            var pattern = [];
+            var pattern = [];   // TO DO, change matching func to string
             pattern.push(x)
             
             if (mm.any(browsePath, pattern, { nocase: true })
