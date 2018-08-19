@@ -6,12 +6,27 @@ var mm = require("micromatch");
 var dataPath = path.join(__dirname, 'dataAll.json')
 var data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 
-filter_OR = ["*voltage*", "*power*"];
-filter_AND = ["*.value"];
-filter_NOT = [];    //[ "*active*", "*factor*"];
+var configPath = path.join(__dirname, 'clientConfig.json')
+var config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+traverse(data).forEach(function (x) {
+
+    if (this.isLeaf && this.key === "browseName") {
+        
+        var nodeBrowsePath = parentsToStringPath(this.parents);
+
+        if (mm.any(nodeBrowsePath, config.server.session.monitor.crawl.any, { nocase: true }) &&
+            mm.all(nodeBrowsePath, config.server.session.monitor.crawl.all, { nocase: true }) &&
+            !mm.any(nodeBrowsePath, config.server.session.monitor.crawl.not, { nocase: true })
+        ) {
+            console.log("Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
+        }
+        
+    }
+});
 
 
-const parentsToPath = (array) => {
+function parentsToStringPath(array) {
 
     var arrayPath = [];
     array.forEach(function (element) {
@@ -25,19 +40,3 @@ const parentsToPath = (array) => {
 
     return arrayPath.join('.');
 }
-
-traverse(data).forEach(function (x) {
-
-    if (this.isLeaf && this.key === "browseName") {
-        
-        var nodeBrowsePath = parentsToPath(this.parents);
-
-        if (mm.any(nodeBrowsePath, filter_OR, { nocase: true }) &&
-            mm.all(nodeBrowsePath, filter_AND, { nocase: true }) &&
-            !mm.any(nodeBrowsePath, filter_NOT, { nocase: true })
-        ) {
-            console.log("Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
-        }
-        
-    }
-});
