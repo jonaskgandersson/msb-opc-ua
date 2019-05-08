@@ -17,6 +17,10 @@ var opcua;
 var async;
 var _;
 var mm;
+var treeify;
+var fs;
+var path;
+var traverse;
 
 var client;
 
@@ -37,10 +41,6 @@ var the_session, the_subscription, endpointUrl;
 var monitoredItems = {};  // Object for holding monitored OPC Items
 
 var NodeCrawler;
-var treeify;
-var fs;
-var path;
-var traverse;
 
 var configPath;
 var config;
@@ -93,10 +93,6 @@ try {
     }
 
     NodeCrawler = opcua.NodeCrawler;
-
-    NodeClass = opcua.NodeClass;
-    attributeIdtoString = _.invert(opcua.AttributeIds);
-    DataTypeIdsToString = _.invert(opcua.DataTypeIds);
 
     client = new opcua.OPCUAClient(config.server.options);
 
