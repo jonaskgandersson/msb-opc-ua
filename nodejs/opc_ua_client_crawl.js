@@ -46,17 +46,6 @@ var clientData = {
     transactionCount: 0,
 };
 
-var options = {
-    endpoint_must_exist: false,
-    keepSessionAlive: true,
-    connectionStrategy: {
-        maxRetry: 10,
-        initialDelay: 2000,
-        maxDelay: 10 * 1000
-    }
-};
-
-
 var the_session, the_subscription, endpointUrl;
 
 var monitoredFilteredItemsListData = {};  // Object for holding monitored OPC Items
@@ -66,8 +55,8 @@ var treeify;
 var fs;
 var path;
 
-port = "4840";
-host = "192.168.200.55";
+var configPath;
+var config;
 
 console.log('STARTING');
 
@@ -85,15 +74,18 @@ try {
     fs = require('fs')
     path = require('path');
 
+    var configPath = path.join(__dirname, 'clientConfig.json')
+    var config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
     NodeCrawler = opcua.NodeCrawler;
 
     NodeClass = opcua.NodeClass;
     attributeIdtoString = _.invert(opcua.AttributeIds);
     DataTypeIdsToString = _.invert(opcua.DataTypeIds);
 
-    client = new opcua.OPCUAClient(options);
+    client = new opcua.OPCUAClient(config.server.options);
 
-    endpointUrl = "opc.tcp://" + host + ":" + port;
+    endpointUrl = config.server.endpointUrl.host + ":" + config.server.endpointUrl.port;
 
     client.on("send_request", function () {
         clientData.transactionCount++;
@@ -137,9 +129,6 @@ try {
         }
     });
 
-    var configPath = path.join(__dirname, 'clientConfig.json')
-    var config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
     Process();
 
 }
@@ -181,15 +170,8 @@ function Process(message, context) {
             var err;
 
             // assert(the_session);
-            const parameters = {
-                requestedPublishingInterval: 100,
-                requestedLifetimeCount: 1000,
-                requestedMaxKeepAliveCount: 12,
-                maxNotificationsPerPublish: 100,
-                publishingEnabled: true,
-                priority: 10
-            };
-            the_subscription = new opcua.ClientSubscription(the_session, parameters);
+
+            the_subscription = new opcua.ClientSubscription(the_session, config.server.session.parameters);
 
             console.log("Subscription created !");
 
@@ -202,16 +184,16 @@ function Process(message, context) {
 
             const crawler = new NodeCrawler(the_session);
 
-            crawler.maxNodesPerRead = 10;
-            crawler.maxNodesPerBrowse = 2;
+            crawler.maxNodesPerRead = config.server.session.monitor.crawler.maxNodesPerRead;
+            crawler.maxNodesPerBrowse = config.server.session.monitor.crawler.maxNodesPerBrowse;
 
             crawler.on("browsed", function (element) {
                 // console.log("->",element.browseName.name,element.nodeId.toString());
             });
 
-            const nodeId = opcua.resolveNodeId("ObjectsFolder");
+            const nodeId = opcua.resolveNodeId(config.server.session.monitor.rootNode.browseName);
 
-            console.log("now crawling object folder ...please wait...");
+            console.log("now crawling " + config.server.session.monitor.rootNode.browseName + " folder ...please wait...");
             crawler.read(nodeId, function (err, obj) {
 
                  fs.writeFileSync('./data.json', JSON.stringify(obj) , 'utf-8');

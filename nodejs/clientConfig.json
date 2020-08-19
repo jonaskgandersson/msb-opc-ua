@@ -1,7 +1,7 @@
 {
     "server": {
         "endpointUrl": {
-            "host": "opc.tcp//",
+            "host": "opc.tcp://192.168.200.55",
             "port": 4840
         },
         "options": {
@@ -23,18 +23,40 @@
                 "priority": 10
             },
             "monitor": {
-                "rootNode":{
-                    "browseName": "RootFolder",
-                    "nodeId" : null
+                "rootNode": {
+                    "browseName": "ObjectsFolder",
+                    "nodeId": null
+                },
+                "settings": {
+                    "samplingInterval": 10000,
+                    "discardOldest": true,
+                    "queueSize": 100
+                },
+                "crawler": {
+                    "maxNodesPerRead": 10,
+                    "maxNodesPerBrowse": 2,
+                    "any": [
+                        "*voltage*",
+                        "*power*"
+                    ],
+                    "all": [
+                        "*.value"
+                    ],
+                    "not": [
+                        ""
+                    ]
                 },
                 "nodes": [
                     {
-                        "browsePath" : "/Objects/Server/",
-                        "nodeId": null
+                        "browsePath": "Objects. [ProcessingUnit].Real Devices.CMCIII-HUM [CMCIII-HUM].Humidity.value",
+                        "settings": {
+                            "samplingInterval": 20000,
+                            "discardOldest": true,
+                            "queueSize": 50
+                        }
                     },
                     {
-                        "browsePath" : null,
-                        "nodeId": "ns=2;s=Real Devices"
+                        "browsePath": "Objects. [ProcessingUnit].Real Devices.CMCIII-HUM [CMCIII-HUM].Temperature.value"
                     }
                 ]
             }
