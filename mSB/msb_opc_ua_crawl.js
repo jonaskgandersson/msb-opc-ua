@@ -25,8 +25,10 @@ var fs;
 var path;
 var traverse;
 
-var config; // Configuration for server connections
+// Configuration for server connections
+var config;
 
+// OPC UA client
 var client;
 
 var clientData = {
@@ -41,117 +43,72 @@ var clientData = {
 };
 
 var the_session, the_subscription, endpointUrl;
-
-var monitoredItems = {};  // Object for holding monitored OPC Items
-
 var NodeCrawler;
 
+// Object for holding monitored OPC Items
+var monitoredItems = {};
+
 var exports = module.exports = {
-    // The Start method is called from the Node. This is where you 
-    // implement your code to fetch the data and submit the message
-    // back to the host.
+
     Start: function () {
         self = this;
         this.Debug('Start');
 
         // logLevel = this.GetPropertyValue('static', 'logLevel');
         // enableLogging = this.GetPropertyValue('static', 'enableLogging');
+        try {
+            config = JSON.parse(self.GetPropertyValue('static', 'advancedConfig'));
+            var useQuickConfig = self.GetPropertyValue('static', 'useQuickConfig');
 
+            if (useQuickConfig) {
+
+                // Overide config with quick setting
+                config.server.endpointUrl.host = "opc.tcp://" + self.GetPropertyValue('static', 'host');
+                config.server.endpointUrl.port = self.GetPropertyValue('static', 'port');
+
+                config.server.session.parameters.requestedPublishingInterval = self.GetPropertyValue('static', 'publishingInterval');
+                config.server.session.parameters.requestedLifetimeCount = 1000;
+                config.server.session.parameters.requestedMaxKeepAliveCount = 12;
+                config.server.session.parameters.maxNotificationsPerPublish = 100;
+                config.server.session.parameters.publishingEnabled = true;
+                config.server.session.parameters.priority = 10;
+
+                config.server.session.monitor.rootNode.browseName = self.GetPropertyValue('static', 'rootNodeCrawl');
+
+                config.server.session.monitor.settings.samplingInterval = self.GetPropertyValue('static', 'samplingInterval');
+                config.server.session.monitor.settings.discardOldest = self.GetPropertyValue('static', 'discardOldest');
+                config.server.session.monitor.settings.queueSize = self.GetPropertyValue('static', 'queueSize');
+
+                config.server.session.monitor.crawler.any = JSON.parse(self.GetPropertyValue('static', 'matchAny'));
+                config.server.session.monitor.crawler.all = JSON.parse(self.GetPropertyValue('static', 'matchAll'));
+                config.server.session.monitor.crawler.not = JSON.parse(self.GetPropertyValue('static', 'matchNot'));
+
+            }
+
+            endpointUrl = config.server.endpointUrl.host + ":" + config.server.endpointUrl.port;
+        } catch (e) {
+            self.ThrowError(null, '00001', e);
+        }
 
         this.AddNpmPackage('node-opcua,micromatch,treeify,traverse', true, function (err) {
             self.Debug('STARTING');
             if (err === null || err === '') {
                 try {
 
-                    opcua = require("node-opcua"); // OPC UA Lib
+                    opcua = require("node-opcua");
                     _ = require("underscore");
                     async = require("async");
                     mm = require("micromatch");
-
                     treeify = require("treeify");
-
                     fs = require('fs')
                     path = require('path');
-
                     traverse = require('traverse');
-
-                    config = self.GetPropertyValue('static', 'AdvancedConfig');
-                    self.Debug(config.toString());
-                    var useQuickConfig = self.GetPropertyValue('static', 'UseQuickConfig');
-
-                    if (useQuickConfig) {
-
-                        // Overide config with quick setting
-                        config.server.endpointUrl.host = "opc.tcp://" + self.GetPropertyValue('static', 'Host');
-                        config.server.endpointUrl.port = self.GetPropertyValue('static', 'Port');
-
-                        config.server.session.parameters.requestedPublishingInterval = self.GetPropertyValue('static', 'PublishingInterval');
-                        config.server.session.parameters.requestedLifetimeCount = 1000;
-                        config.server.session.parameters.requestedMaxKeepAliveCount = 12;
-                        config.server.session.parameters.maxNotificationsPerPublish = 100;
-                        config.server.session.parameters.publishingEnabled = true;
-                        config.server.session.parameters.priority = 10;
-
-                        config.server.session.monitor.rootNode.browseName = self.GetPropertyValue('static', 'RootNodeCrawl');
-
-                        config.server.session.monitor.settings.samplingInterval = self.GetPropertyValue('static', 'SamplingInterval');
-                        config.server.session.monitor.settings.discardOldest = self.GetPropertyValue('static', 'DiscardOldest');
-                        config.server.session.monitor.settings.queueSize = self.GetPropertyValue('static', 'QueueSize');
-
-                        config.server.session.monitor.crawler.any = self.GetPropertyValue('static', 'MatchAny');
-                        config.server.session.monitor.crawler.all = self.GetPropertyValue('static', 'MatchAll');
-                        config.server.session.monitor.crawler.not = self.GetPropertyValue('static', 'MatchNot');
-
-                    }
 
                     NodeCrawler = opcua.NodeCrawler;
 
                     client = new opcua.OPCUAClient(config.server.options);
 
-                    endpointUrl = config.server.endpointUrl.host + ":" + config.server.endpointUrl.port;
-
-                    client.on("send_request", function () {
-                        clientData.transactionCount++;
-                    });
-
-                    client.on("send_chunk", function (chunk) {
-                        clientData.sentBytes += chunk.length;
-                        clientData.sentChunks++;
-                    });
-
-                    client.on("receive_chunk", function (chunk) {
-                        clientData.receivedBytes += chunk.length;
-                        clientData.receivedChunks++;
-                    });
-
-                    client.on("backoff", function (number, delay) {
-                        clientData.backoffCount += 1;
-                        console.log('backoff  attempt #${number} retrying in ${delay / 1000.0} seconds');
-                    });
-
-                    client.on("start_reconnection", function () {
-                        console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl);
-                    });
-
-                    client.on("connection_reestablished", function () {
-                        console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl);
-                        clientData.reconnectionCount++;
-                    });
-
-                    // monitoring des lifetimes
-                    client.on("lifetime_75", function (token) {
-                        if (true) {
-                            console.log("received lifetime_75 on " + endpointUrl);
-                        }
-                    });
-
-                    client.on("security_token_renewed", function () {
-                        clientData.tokenRenewalCount += 1;
-                        if (true) {
-                            console.log(" security_token_renewed on " + endpointUrl);
-                        }
-                    });
-
+                    // Start OPC UA client
                     Run();
 
                 }
@@ -172,14 +129,13 @@ var exports = module.exports = {
     Stop: function () {
         self.Debug('The Stop method is called.');
 
-        // Close OPC UA session
+        // Close OPC UA session and disconnect client from server
         the_session.close(function (err) {
             if (err) {
                 console.log("session closed failed ?");
             }
+            client.disconnect(function () { });
         });
-
-
     },
 
     Process: function (message, context) {
@@ -189,10 +145,70 @@ var exports = module.exports = {
     },
 }
 
+// Called on value change, add customization of data here
+function sendMessage( data ){
+    
+    
+    let payload = {
+        id: self.NodeName,
+        Time: Date.now(),
+        geohash: "u626kuwks"
+    };
+    
+    payload[data.browseName.name] = data.value.value;
+    
+    self.Debug( JSON.stringify(payload)  );
+    
+    self.SubmitMessage(payload, 'application/json', []);
+}
+
 function Run() {
+
+    client.on("send_request", function () {
+        clientData.transactionCount++;
+    });
+
+    client.on("send_chunk", function (chunk) {
+        clientData.sentBytes += chunk.length;
+        clientData.sentChunks++;
+    });
+
+    client.on("receive_chunk", function (chunk) {
+        clientData.receivedBytes += chunk.length;
+        clientData.receivedChunks++;
+    });
+
+    client.on("backoff", function (number, delay) {
+        clientData.backoffCount += 1;
+        console.log('backoff  attempt #${number} retrying in ${delay / 1000.0} seconds');
+    });
+
+    client.on("start_reconnection", function () {
+        console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  Starting reconnection !!!!!!!!!!!!!!!!!!! " + endpointUrl);
+    });
+
+    client.on("connection_reestablished", function () {
+        console.log(" !!!!!!!!!!!!!!!!!!!!!!!!  CONNECTION RE-ESTABLISHED !!!!!!!!!!!!!!!!!!! " + endpointUrl);
+        clientData.reconnectionCount++;
+    });
+
+    // monitoring des lifetimes
+    client.on("lifetime_75", function (token) {
+        if (true) {
+            console.log("received lifetime_75 on " + endpointUrl);
+        }
+    });
+
+    client.on("security_token_renewed", function () {
+        clientData.tokenRenewalCount += 1;
+        if (true) {
+            console.log(" security_token_renewed on " + endpointUrl);
+        }
+    });
+
     async.series([
 
-        // step 1 : connect to
+        // step 1 : connect to server
         function (callback) {
             client.connect(endpointUrl, function (err) {
                 if (err) {
@@ -240,7 +256,7 @@ function Run() {
                 // console.log("->",element.browseName.name,element.nodeId.toString());
             });
 
-            // Set start node for browse 
+            // Set start node for browse TO DO, use nodeId in config if set
             const nodeId = opcua.resolveNodeId(config.server.session.monitor.rootNode.browseName);
 
             console.log("Now crawling " + config.server.session.monitor.rootNode.browseName + " folder ...please wait...");
@@ -249,12 +265,13 @@ function Run() {
                 if (!err) {
                     console.log("Crawling done!");
 
-
+                    // Walk returned namespace and return matching nodes
                     var filterdItems = walkNameSpace(obj, config.server.session.monitor)
 
+                    // Add filtered items to subscription
                     for (var key in filterdItems) {
                         if (filterdItems.hasOwnProperty(key)) {
-                            monitor_filtered_item(the_subscription, filterdItems[key]);
+                            monitorFilteredItem(the_subscription, filterdItems[key]);
                         }
                     }
 
@@ -276,10 +293,10 @@ function Run() {
             } else {
                 console.log("done!");
             }
-            //client.disconnect(function () { });
         });
 }
 
+// Returns browse path for an node in namespace
 function parentsToStringPath(array) {
 
     var arrayPath = [];
@@ -295,6 +312,7 @@ function parentsToStringPath(array) {
     return arrayPath.join('.');
 }
 
+// Check if any exact match for node is in config
 function findBrowseMatch(browsePath, configData) {
 
     var match = traverse(configData).reduce(function (acc, x) {
@@ -310,6 +328,7 @@ function findBrowseMatch(browsePath, configData) {
     return match.length ? match : null;
 }
 
+// Walk namespace and return nodes mathing nodes in config
 function walkNameSpace(nameSpaceData, monitorConfig) {
 
     var monitorList = {};
@@ -324,8 +343,9 @@ function walkNameSpace(nameSpaceData, monitorConfig) {
 
             var browseMatch = findBrowseMatch(nodeBrowsePath, monitorConfig.nodes);
 
+            // If exact match in config skip crawling for node
             if (browseMatch) {
-                console.log("[Browse] Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
+                console.log("[Browse] Match Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
 
                 monitorItem["browseName"] = nodeBrowsePath;
                 monitorItem["node"] = this.parent.node;
@@ -337,7 +357,7 @@ function walkNameSpace(nameSpaceData, monitorConfig) {
                 mm.all(nodeBrowsePath, monitorConfig.crawler.all, { nocase: true }) &&
                 !mm.any(nodeBrowsePath, monitorConfig.crawler.not, { nocase: true })
             ) {
-                console.log("[Crawl] Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
+                console.log("[Crawl] Match Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
 
                 monitorItem["browseName"] = nodeBrowsePath;
                 monitorItem["node"] = this.parent.node;
@@ -352,7 +372,8 @@ function walkNameSpace(nameSpaceData, monitorConfig) {
     return monitorList;
 }
 
-function monitor_filtered_item(g_subscription, item) {
+// Add items to monitor list and add an subscription on server
+function monitorFilteredItem(g_subscription, item) {
 
     const monitoredItem = g_subscription.monitor({
         nodeId: item.node.nodeId,
@@ -363,7 +384,7 @@ function monitor_filtered_item(g_subscription, item) {
         opcua.read_service.TimestampsToReturn.Both
     );
 
-    // Add monitored nodes to map list
+    // Add monitored nodes to an monitor list, this to add all attributes that is not recived on value change callback
     createNodeObject(item.node.nodeId, function (err, data) {
 
         if (!err) {
@@ -376,6 +397,7 @@ function monitor_filtered_item(g_subscription, item) {
         }
     });
 
+    // Calback for value change in server
     monitoredItem.on("changed", function (dataValue) {
 
         if (item.node.nodeId.toString() in monitoredItems) {
@@ -387,9 +409,9 @@ function monitor_filtered_item(g_subscription, item) {
             monitoredItems[item.node.nodeId.toString()].clientTimestamp = new Date();
 
             console.log("Value change: " + JSON.stringify(monitoredItems[item.node.nodeId.toString()], null, 4));
-            
-            // Submit payload to Node.
-           self.SubmitMessage(monitoredItems[item.node.nodeId.toString()], 'application/json', []);
+
+            // Submit payload to mSB
+            sendMessage(monitoredItems[item.node.nodeId.toString()]);
         }
         else {
             console.log("Value changed unknown nodeId: " + item.node.nodeId.toString());
@@ -398,6 +420,7 @@ function monitor_filtered_item(g_subscription, item) {
 
 }
 
+// Fetch all attributes for an node on server
 function createNodeObject(node_Id, callback) {
 
     the_session.readAllAttributes(node_Id, function (err, result) {
