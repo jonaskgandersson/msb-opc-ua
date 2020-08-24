@@ -11,24 +11,24 @@
 
 "use strict"
 const async = require("async");
-const { OPCUAClient, MessageSecurityMode, SecurityPolicy, DataValue, AttributeIds, DataType } = require("node-opcua");
+var { OPCUAClient, MessageSecurityMode, SecurityPolicy, OPCUACertificateManager, DataValue, AttributeIds, DataType } = require("node-opcua");
 
 const connectionStrategy = {
     initialDelay: 2000,
     maxDelay: 10 * 1000,
-    maxRetry: 10,
+    // maxRetry: 10,
 };
 
 const options = {
     applicationName: "MyClient",
     connectionStrategy: connectionStrategy,
-    securityMode: MessageSecurityMode.None,
-    securityPolicy: SecurityPolicy.None,
-    endpoint_must_exist: false
+    securityMode: MessageSecurityMode.Sign,
+    securityPolicy: SecurityPolicy.Basic256,
+    endpoint_must_exist: true
 };
 
 const credentials = {
-    userName: "Administrator",
+    userName: "",
     password: ""
 };
 
@@ -38,16 +38,9 @@ const endpointUrl = "opc.tcp://127.0.0.1:49320";
 const nodeId = "ns=2;s=Channel1.Device1.Tag2";
 
 const dataValue = new DataValue({
-
-    // serverTimestamp: null,
-    // serverPicoseconds: 0,
-
-    // sourceTimestamp: null,
-    // sourcePicoseconds: 0,
-
     value: {
         dataType: DataType.Float,
-        value: 42.0
+        value: 46.00000
     }
 });
 
@@ -71,9 +64,38 @@ const nodesToRead = [
 ];
 
 let clientSession;
+
+const selfSignedCert = {
+    applicationUri: "OPCUA-TEST2",
+    subject: "/CN=sdfsdf;/L=Sweden",
+    dns: [],
+    // ip: [],
+    startDate: new Date(),
+    validity: 365 * 10,
+}
+
+const clientCertificateManager = new OPCUACertificateManager({
+    automaticallyAcceptUnknownCertificate: true,
+});
+
 let client = OPCUAClient.create(options);
 
+client.on("backoff", (nbRetry, maxDelay) => {
+    console.log("retrying ", nbRetry);
+});
+
 async.series([
+
+    // Setup Certificate manager
+    function (callback) {
+        clientCertificateManager.initialize((err) => {
+            if (!err) {
+                clientCertificateManager.createSelfSignedCertificate(selfSignedCert, (callback));
+            } else {
+                callback(err);
+            }
+        });
+    },
 
     // connect
     function (callback) {
