@@ -1,14 +1,14 @@
-/* 
+/*
  * OPC UA Client
- * 
+ *
  * Browse Server namespace using crawl
  * save result to client and add subscription
  * to nodes from list matching browse name
- * 
+ *
  * On value change send data as JSON message.
- * 
+ *
  * Author: Jonas Andersson, Actemium
- * 
+ *
  */
 
 var self;
@@ -18,7 +18,7 @@ var enableLogging;
 
 var opcua;
 var _;
-var async;
+var async = require("async");
 var mm;
 var treeify;
 var fs;
@@ -40,6 +40,11 @@ var clientData = {
     receivedChunks: 0,
     backoffCount: 0,
     transactionCount: 0,
+};
+
+const credentials = {
+    userName: "test",
+    password: "test"
 };
 
 var the_session, the_subscription, endpointUrl;
@@ -90,14 +95,14 @@ var exports = module.exports = {
             self.ThrowError(null, '00001', e);
         }
 
-        this.AddNpmPackage('node-opcua,micromatch,treeify,traverse', true, function (err) {
+        this.AddNpmPackage('node-opcua@2.10.0,micromatch,treeify,traverse', true, function (err) {
             self.Debug('STARTING');
             if (err === null || err === '') {
                 try {
 
                     opcua = require("node-opcua");
                     _ = require("underscore");
-                    async = require("async");
+
                     mm = require("micromatch");
                     treeify = require("treeify");
                     fs = require('fs')
@@ -106,7 +111,7 @@ var exports = module.exports = {
 
                     NodeCrawler = opcua.NodeCrawler;
 
-                    client = new opcua.OPCUAClient(config.server.options);
+                    client = opcua.OPCUAClient.create(config.server.options);
 
                     // Start OPC UA client
                     Run();
@@ -115,8 +120,7 @@ var exports = module.exports = {
                 catch (e) {
                     self.ThrowError(null, '00001', e);
                 }
-            }
-            else {
+            } else {
                 self.ThrowError(null, '00001', 'Unable to install node-opcua npm package');
                 self.ThrowError(null, '00001', JSON.stringify(err));
                 return;
@@ -124,8 +128,8 @@ var exports = module.exports = {
         });
 
     },
-    // The Stop method is called from the Node when the Node is 
-    // either stopped or has updated Flows. 
+    // The Stop method is called from the Node when the Node is
+    // either stopped or has updated Flows.
     Stop: function () {
         self.Debug('The Stop method is called.');
 
@@ -134,7 +138,7 @@ var exports = module.exports = {
             if (err) {
                 console.log("session closed failed ?");
             }
-            client.disconnect(function () { });
+            client.disconnect(function () {});
         });
     },
 
@@ -146,19 +150,19 @@ var exports = module.exports = {
 }
 
 // Called on value change, add customization of data here
-function sendMessage( data ){
-    
-    
+function sendMessage(data) {
+
+
     let payload = {
         id: self.NodeName,
         Time: Date.now(),
         geohash: "u626kuwks"
     };
-    
+
     payload[data.browseName.name] = data.value.value;
-    
-    self.Debug( JSON.stringify(payload)  );
-    
+
+    self.Debug(JSON.stringify(payload));
+
     self.SubmitMessage(payload, 'application/json', []);
 }
 
@@ -222,7 +226,7 @@ function Run() {
 
         // step 2 : createSession
         function (callback) {
-            client.createSession(function (err, session) {
+            client.createSession(credentials, function (err, session) {
                 if (!err) {
                     the_session = session;
                     console.log("Session created !");
@@ -236,9 +240,12 @@ function Run() {
 
             var err;
 
-            the_subscription = new opcua.ClientSubscription(the_session, config.server.session.parameters);
-
-            console.log("Subscription created !");
+            the_session.createSubscription2(config.server.session.parameters, function (err, subsc) {
+                if (!err) {
+                    the_subscription = subsc;
+                    console.log("Subscription created !");
+                }
+            });
 
             callback(err);
 
@@ -285,8 +292,7 @@ function Run() {
                 }
                 callback(err);
             });
-        }
-    ],
+        }],
         function (err) {
             if (err) {
                 console.log(" failure " + err);
@@ -325,7 +331,7 @@ function findBrowseMatch(browsePath, configData) {
         return acc;
     }, []);
 
-    return match.length ? match : null;
+    return match.length ? match: null;
 }
 
 // Walk namespace and return nodes mathing nodes in config
@@ -349,13 +355,19 @@ function walkNameSpace(nameSpaceData, monitorConfig) {
 
                 monitorItem["browseName"] = nodeBrowsePath;
                 monitorItem["node"] = this.parent.node;
-                monitorItem["settings"] = browseMatch[0].settings ? browseMatch[0].settings : monitorConfig.settings;
+                monitorItem["settings"] = browseMatch[0].settings ? browseMatch[0].settings: monitorConfig.settings;
 
                 monitorList[this.parent.node.nodeId] = monitorItem;
 
-            } else if (mm.any(nodeBrowsePath, monitorConfig.crawler.any, { nocase: true }) &&
-                mm.all(nodeBrowsePath, monitorConfig.crawler.all, { nocase: true }) &&
-                !mm.any(nodeBrowsePath, monitorConfig.crawler.not, { nocase: true })
+            } else if (mm.any(nodeBrowsePath, monitorConfig.crawler.any, {
+                    nocase: true
+                }) &&
+                mm.all(nodeBrowsePath, monitorConfig.crawler.all, {
+                    nocase: true
+                }) &&
+                !mm.any(nodeBrowsePath, monitorConfig.crawler.not, {
+                    nocase: true
+                })
             ) {
                 console.log("[Crawl] Match Node: " + nodeBrowsePath + ", Id: " + this.parent.node.nodeId);
 
@@ -375,49 +387,51 @@ function walkNameSpace(nameSpaceData, monitorConfig) {
 // Add items to monitor list and add an subscription on server
 function monitorFilteredItem(g_subscription, item) {
 
-    const monitoredItem = g_subscription.monitor({
+    g_subscription.monitor({
         nodeId: item.node.nodeId,
         attributeId: opcua.AttributeIds.Value,
-        dataEncoding: { namespaceIndex: 0, name: null }
+        dataEncoding: {
+            namespaceIndex: 0, name: null
+        }
     },
         item.settings,
-        opcua.read_service.TimestampsToReturn.Both
+        opcua.TimestampsToReturn.Both,
+        function (err, monitoredItem) {
+            if (!err) {
+
+                // Add monitored nodes to map list
+                createNodeObject(item.node.nodeId, function (err, data) {
+
+                    if (!err) {
+                        monitoredItems[item.node.nodeId.toString()] = data;
+                        monitoredItems[item.node.nodeId.toString()].browsePath = item.browseName;
+                        console.log("Add " + monitoredItems[item.node.nodeId.toString()].browseName.name.toString() + " to monitoring list");
+                    } else {
+                        console.log("#createObject error:" + err);
+                    }
+                });
+
+                monitoredItem.on("changed", function (dataValue) {
+
+                    if (item.node.nodeId.toString() in monitoredItems) {
+
+                        monitoredItems[item.node.nodeId.toString()].value = dataValue.value;
+                        monitoredItems[item.node.nodeId.toString()].statusCode = dataValue.statusCode;
+                        monitoredItems[item.node.nodeId.toString()].serverTimestamp = dataValue.serverTimestamp;
+                        monitoredItems[item.node.nodeId.toString()].sourceTimestamp = dataValue.sourceTimestamp;
+                        monitoredItems[item.node.nodeId.toString()].clientTimestamp = new Date();
+
+                        console.log("Value change: " + JSON.stringify(monitoredItems[item.node.nodeId.toString()], null, 4));
+
+                        // Submit payload to mSB
+                        sendMessage(monitoredItems[item.node.nodeId.toString()]);
+                    } else {
+                        console.log("Value changed unknown nodeId: " + item.node.nodeId.toString());
+                    }
+                });
+            }
+        }
     );
-
-    // Add monitored nodes to an monitor list, this to add all attributes that is not recived on value change callback
-    createNodeObject(item.node.nodeId, function (err, data) {
-
-        if (!err) {
-            monitoredItems[item.node.nodeId.toString()] = data;
-            monitoredItems[item.node.nodeId.toString()].browsePath = item.browseName;
-            console.log("Add " + monitoredItems[item.node.nodeId.toString()].browseName.name.toString() + " to monitoring list");
-        }
-        else {
-            console.log("#createObject error:" + err);
-        }
-    });
-
-    // Calback for value change in server
-    monitoredItem.on("changed", function (dataValue) {
-
-        if (item.node.nodeId.toString() in monitoredItems) {
-
-            monitoredItems[item.node.nodeId.toString()].value = dataValue.value;
-            monitoredItems[item.node.nodeId.toString()].statusCode = dataValue.statusCode;
-            monitoredItems[item.node.nodeId.toString()].serverTimestamp = dataValue.serverTimestamp;
-            monitoredItems[item.node.nodeId.toString()].sourceTimestamp = dataValue.sourceTimestamp;
-            monitoredItems[item.node.nodeId.toString()].clientTimestamp = new Date();
-
-            console.log("Value change: " + JSON.stringify(monitoredItems[item.node.nodeId.toString()], null, 4));
-
-            // Submit payload to mSB
-            sendMessage(monitoredItems[item.node.nodeId.toString()]);
-        }
-        else {
-            console.log("Value changed unknown nodeId: " + item.node.nodeId.toString());
-        }
-    });
-
 }
 
 // Fetch all attributes for an node on server
@@ -427,8 +441,7 @@ function createNodeObject(node_Id, callback) {
 
         if (!err) {
             callback(err, result);
-        }
-        else {
+        } else {
             callback(err, null);
         }
     })

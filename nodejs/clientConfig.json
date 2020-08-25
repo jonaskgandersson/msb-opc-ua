@@ -36,14 +36,10 @@
                     "maxNodesPerRead": 10,
                     "maxNodesPerBrowse": 2,
                     "any": [
-                        "*voltage*",
-                        "*power*"
                     ],
                     "all": [
-                        "*.value"
                     ],
                     "not": [
-                        ""
                     ]
                 },
                 "nodes": [
